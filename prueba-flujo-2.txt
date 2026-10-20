@@ -1,0 +1,1 @@
+Segundo ciclo de prueba para Issue #3 (validar fix MAX_NODE_LIMIT_EXCEEDED).
