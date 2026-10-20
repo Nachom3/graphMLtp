@@ -57,7 +57,7 @@ jobs:
               return;
             }
 
-            // Buscar el proyecto GraphML
+            // Buscar el proyecto GraphMl
             const response = await github.graphql(`
               query($login: String!) {
                 user(login: $login) {
@@ -78,10 +78,10 @@ jobs:
             `, { login: "Nachom3" });
 
             const project = response.user.projectsV2.nodes
-              .find(p => p.title === "GraphML");
+              .find(p => p.title.toLowerCase() === "graphml");
 
             if (!project) {
-              throw new Error("No se encontró GraphML");
+              throw new Error("No se encontró GraphMl");
             }
 
             const status = project.field;
