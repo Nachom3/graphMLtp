@@ -27,12 +27,12 @@ jobs:
                   pullRequests(
                     headRefName: $branch,
                     states: [MERGED],
-                    first: 50
+                    first: 10
                   ) {
                     nodes {
                       number
                       isCrossRepository
-                      closingIssuesReferences(first: 100) {
+                      closingIssuesReferences(first: 10) {
                         nodes {
                           number
                           projectItems(first: 100) {
