@@ -46,3 +46,6 @@ Además, crear una API del tipo REST:
 Una arquitectura de este estilo nos permitiría crear una capa de abstracción tal que podríamos testear distintos modelos hasta encontrar el adecuado, sin cambiar la lógica de negocio.
 
 ![Diagrama de arquitectura](image.png)
+
+Debemos pensar una vez seleccionado el tp, el HLD y LLD, de forma que podramos establecer un norte y crear los diferentes issues.
+
