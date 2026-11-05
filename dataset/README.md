@@ -87,3 +87,34 @@ Script Python reproducible con semilla fija que:
 Los binarios grandes (`*.zip`, `*.shp`, etc.) están ignorados por
 `dataset/.gitignore`: se descargan/reproducen, no se versionan. Los CSV
 chicos y todos los README sí se versionan.
+
+## Anexo: barrido final del catálogo (todo Montevideo, 05/11/2026)
+
+Vía API del catálogo (`package_search?q=contenedores` → 7 datasets,
+`q=residuos recoleccion` → 6). Todo lo útil es Intendencia de Montevideo
+bajo Licencia DAG de Uruguay. Veredicto: **nos quedamos con 5 + OSM**.
+
+### Nos quedamos ✅
+
+| # | Dataset | Rol en el TP | Estado |
+|---|---|---|---|
+| 1 | Ubicación + circuitos + frecuencia (`Contenedores_domiciliarios.zip` + `Circuitos_recoleccion.zip`, UTM 21S, diario) | Base: coordenadas, circuito y frecuencia programada por contenedor | Por descargar (navegador) |
+| 2 | Levantes 2024–2026 (cuatrimestres de ~130–150 MB + 24 h horario) | Estado operativo actual por contenedor (foto 6 AM diaria) | Por descargar (un cuatrimestre basta) |
+| 3 | Estado de recolección 2017–2020 (7 archivos, 0,3–82 MB) | Serie histórica levantado/no por contenedor-viaje → `dias_*` real | Por descargar (metadata + un semestre) |
+| 4 | Viajes y peso 2021–2022 (755/435 KB + `trayectos.csv` 129 KB) | Demanda real por circuito-día; `trayectos.csv` puede mapear circuito→tramos | Por descargar (liviano) |
+| 5 | Reclamos SUR (2016–hoy, ZIP mensual) | `historico_quejas` real si filtra por residuos y geolocaliza | Por verificar columnas |
+| 6 | OSM Geofabrik Uruguay (ya en `01_red-vial-osm/`) | Geometría de calles para el grafo | ✅ Descargado |
+
+Plan de unión: 1 (id + circuito + coords) ⋈ 2/3 (id + fecha + levantado)
+→ última recolección por contenedor → snap a tramo → features por tramo.
+4 aporta demanda por circuito; 5, quejas reales por tramo si integra.
+
+### Descartamos ❌
+
+- Residuos secos en supermercados/complejos, especiales JC Decaux
+  (pilas/latas/vidrio) y ¿Dónde Reciclo?: **otro circuito de recolección**,
+  no el domiciliario puerta a puerta del TP.
+- Figshare coordenadas: queda como respaldo (ya descargado) si el ZIP
+  oficial falla; si no, se usa el oficial.
+- Windsor: otra ciudad; solo se conservan sus estadísticos agregados como
+  calibración de la simulación, sin filas en el dataset.
