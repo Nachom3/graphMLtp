@@ -1,0 +1,42 @@
+---
+name: Tarea del proyecto
+description: Organizá una tarea con sus pasos y criterios de aprobación.
+body:
+  - type: textarea
+    id: cuerpo
+    attributes:
+      label: Cuerpo
+      description: Explicá qué hay que hacer y por qué.
+      placeholder: Describí el objetivo y el contexto de la tarea.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tareas
+    attributes:
+      label: Tareas
+      description: Enumerá los pasos necesarios para completar la tarea.
+      placeholder: |
+        - [ ] Primera tarea
+        - [ ] Segunda tarea
+    validations:
+      required: true
+
+  - type: textarea
+    id: minimo-para-aprobar
+    attributes:
+      label: Mínimo para aprobar
+      description: Indicá las condiciones para dar la tarea por terminada.
+      placeholder: Describí resultados concretos que se puedan verificar.
+    validations:
+      required: true
+
+  - type: textarea
+    id: archivos-afectados
+    attributes:
+      label: Archivos afectados
+      description: |
+        Listá los archivos previstos. Si no se conocen, escribí «A definir».
+      placeholder: Rutas de archivos o A definir.
+    validations:
+      required: true
