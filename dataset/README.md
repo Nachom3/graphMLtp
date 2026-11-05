@@ -6,16 +6,16 @@ CSV finales (`nodos.csv`, `tramos.csv`) corresponde al issue #9.
 
 ## Decisión
 
-Dataset **mixto** en una zona piloto de Montevideo:
+Dataset **mixto** en una zona piloto de Montevideo (diseño v2):
 
-- Real-derivado: geometría vial (ejes IDE Uruguay) + contenedores por tramo (Figshare/IM).
-- Simulado reproducible: `tipo_zona`, `dias_desde_ultima_recoleccion`,
-  `historico_quejas_vecinales` (con semilla, issue #9).
-- Etiqueta construida: `prioridad_recoleccion` con regla pública v1 (no oficial).
+- Real-derivado: geometría vial (**fuente primaria ejes IDE Uruguay**) + contenedores por tramo (primario BasuraCero en `09_levantes/`; respaldo geográfico Figshare/IM en `02_contenedores-montevideo/`).
+- `dias_desde_ultima_recoleccion` **real** (BasuraCero, foto T0); `historico_quejas_vecinales` **real** (Por Mi Barrio en `07_reclamos-sur/`, ventana previa a T0).
+- **Única simulada por diseño**: `tipo_zona` (con semilla, issue #9).
+- Etiqueta construida: `prioridad_recoleccion` con regla pública v1 (no oficial). OSM Geofabrik queda solo como respaldo / contingencia con versión congelada.
 
 Zona piloto v1 (WGS84): oeste `-56.16`, sur `-34.915`, este `-56.15`,
-norte `-34.905`. Recorte chico (~1 km × ~1.1 km) con 196 contenedores y
-~138 registros viales intersectados: tamaño apto para clasificar y correr
+norte `-34.905`. Recorte chico (~1 km × ~1.1 km) con 196 contenedores Figshare (129 del snapshot BasuraCero en el mismo bbox) y
+304 segmentos IDE que tocan el bbox (~138 registros viales OSM intersectados): tamaño apto para clasificar y correr
 Hierholzer / cartero chino. Si el componente conexo mayor queda con menos de
 ~100 aristas, se amplía al recorte medio (ver `11_ejes-ide/README.md`).
 
@@ -23,11 +23,14 @@ Hierholzer / cartero chino. Si el componente conexo mayor queda con menos de
 
 | Carpeta | Contenido |
 |---|---|
-| `01_red-vial-osm/` | ZIP de Geofabrik Uruguay (80 MB, respaldo) — la fuente primaria es `11_ejes-ide/` |
-| `02_contenedores-montevideo/` | `coordenadasContenedores.csv` (11.556 puntos lon,lat) + descripción |
+| `01_red-vial-osm/` | ZIP de Geofabrik Uruguay (80 MB, **respaldo / contingencia con versión congelada**) — la fuente primaria es `11_ejes-ide/` |
+| `02_contenedores-montevideo/` | `coordenadasContenedores.csv` (11.556 puntos lon,lat) + descripción (respaldo geográfico; primario: `09_levantes/`) |
+| `07_reclamos-sur/` | `pormibarrio_reports.csv` (4.863 reportes reales) → `historico_quejas` real |
 | ~~`03_reclamos-windsor-referencia/`~~ | Eliminada: era otra ciudad; sus agregados ya quedaron documentados |
 | `11_ejes-ide/` | `ejes_montevideo.csv` (11.299.973 bytes, SHA-256 `b2fa87f24a029849bb00a186b6a61e9a4803221ea8bed9078cc14e52f79cb60b`) + metadatos + descripción |
-| `04_esquema-y-regla-etiqueta/` | Esquema `nodos.csv`/`tramos.csv`, regla de etiqueta v1, ejemplos, plan del script |
+| `04_esquema-y-regla-etiqueta/` | Esquema `nodos.csv`/`tramos.csv`, regla de etiqueta v1, ejemplos, plan del script + camino crítico sklearn del #10 |
+| `09_levantes/` | `containers.json` (10.458 contenedores, foto operativa real) → `dias_*` real + validación del snap por `circuitCode` |
+| `10_smartwaste-mvd/` | Espejo académico Mendeley (frecuencia y circuitos reales, referencia de costos) |
 
 ## Trazabilidad de lo descargado
 
@@ -67,20 +70,21 @@ Script Python reproducible con semilla fija que:
 2. Construye el grafo (nodos = intersecciones, aristas = tramos) y se queda
    con el componente conexo mayor; calcula `longitud_m` geodésica.
 3. Asigna cada contenedor al tramo más cercano (radio y desempates
-   documentados) → `cantidad_contenedores`.
-4. Genera `tipo_zona` (≈60/25/15), `dias` (uniforme 0–7) y `quejas`
-   (calibrada con agregados de Windsor) con RNG sembrado.
+   documentados; `circuitCode` de BasuraCero valida el snap) → `cantidad_contenedores`.
+4. `tipo_zona` única simulada (≈60/25/15, RNG sembrado semilla 0); `dias` real agregado por tramo desde `daysWithoutLift` (auditar cola 0–486); `quejas` reales desde Por Mi Barrio (lista cerrada de categorías + deduplicación).
 5. Aplica la regla v1, reporta balance por clase y escribe
    `nodos.csv` + `tramos.csv` con versiones y semilla registradas.
 
 ## Licencias
 
-- OSM/Geofabrik: ODbL, exige atribución a OpenStreetMap y contribuyentes y
+- OSM/Geofabrik (respaldo): ODbL, exige atribución a OpenStreetMap y contribuyentes y
   misma licencia al redistribuir la base derivada.
+- IDE Uruguay: verificar ficha del catálogo antes de redistribuir derivados; uso académico con atribución.
 - Figshare (Toyos; Vallcorba): CC BY 4.0, con origen en datos abiertos de la
-  Intendencia de Montevideo.
-- Windsor (carpeta eliminada): solo se reutilizaron sus estadísticos
-  agregados históricos; sin filas en el dataset.
+  Intendencia de Montevideo (licencia DAG-UY).
+- Datos operativos IM / BasuraCero: DAG-UY; crédito a IM + BasuraCero como espejo.
+- SmartWaste Mendeley: verificar ficha antes de redistribuir derivados.
+- Windsor (carpeta eliminada): solo agregados históricos ya registrados, sin filas; no es fuente vigente.
 
 ## Git
 
@@ -119,7 +123,7 @@ Plan de unión: 1 (id + circuito + coords) ⋈ 2/3 (id + fecha + levantado)
   oficial falla; si no, se usa el oficial.
 - Windsor: otra ciudad, carpeta eliminada; sus agregados históricos ya
   quedaron registrados en `docs/dataset-recoleccion.md` como
-  calibración de la simulación, sin filas en el dataset.
+  agregado histórico (no fuente vigente), sin filas en el dataset.
 - Residuos en playas (kg/mes): fuera del circuito domiciliario. ❌
 
 ### En evaluación (barrido por keywords 05/11/2026)

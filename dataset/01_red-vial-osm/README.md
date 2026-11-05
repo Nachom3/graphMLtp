@@ -1,4 +1,6 @@
-# 01 · Red vial (OpenStreetMap vía Geofabrik)
+# 01 · Red vial (OpenStreetMap vía Geofabrik) — respaldo / contingencia
+
+> La fuente primaria del grafo es IDE Uruguay (`dataset/11_ejes-ide/`). Este extracto OSM queda solo como respaldo para reproducir si IDE cae, con versión congelada (fecha + SHA abajo). No se construyen `tramo_id` ni `longitud_m` desde acá en el diseño v2.
 
 ## Fuente
 
@@ -43,9 +45,10 @@ intersección de bbox, no segmentación final):
 Se eligió la pequeña: ~100–200 aristas esperadas tras el clip, ideal para
 entrenar un clasificador demo y visualizar Hierholzer. Si el componente
 conexo mayor queda con menos de ~100 aristas, el issue #9 amplía al recorte
-medio y lo registra.
+medio y lo registra. En el diseño v2 el grafo se construye desde IDE
+(`11_ejes-ide/`); este ZIP solo se usa si IDE no está disponible.
 
-## Cómo se usará (issue #9)
+## Cómo se usaría solo si IDE cae (contingencia, issue #9)
 
 1. Extraer `gis_osm_roads_free_1.*` del ZIP.
 2. Recortar al bbox v1 y construir el grafo: nodos en intersecciones y

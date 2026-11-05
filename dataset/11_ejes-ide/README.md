@@ -19,7 +19,7 @@
 - Nombres reales (p. ej. `21 DE SETIEMBRE`, `AVENIDA BRASIL`,
   `BULEVAR ESPAÑA`); `tipo_vialidad` (calle, pasaje, avenida…).
 - Conversión a WGS84 verificada con PROJ (punto de control cae en
-  Montevideo). OSM Geofabrik (`01_`) queda como respaldo.
+  Montevideo). OSM Geofabrik (`01_`) queda solo como respaldo / contingencia con versión congelada (SHA `37fd73...`, Last-Modified Thu 05 Nov 2026).
 
 ## Cobertura del piloto
 
@@ -30,5 +30,6 @@ como `tramo_id` real (reemplaza IDs sintéticos T0001…).
 ## Uso en el TP (issue #9)
 
 Clip al bbox → nodos en extremos/intersecciones → componente conexo mayor →
-`longitud_m` geodésica. `nombre` alimenta `nombre_calle` y el frontend.
+`longitud_m` geodésica (WGS84, no euclídea en grados). `nombre` alimenta `nombre_calle` y el frontend.
 `tipo_vialidad`/`idcalle` ayudan a depurar el snap contenedor→tramo.
+`tramo_id = reftramo` (con sufijo si un eje se parte al crear nodos; reemplaza IDs sintéticos `T0001…`).

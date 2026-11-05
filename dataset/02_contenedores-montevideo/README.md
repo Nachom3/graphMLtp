@@ -1,4 +1,6 @@
-# 02 · Contenedores de Montevideo (coordenadas)
+# 02 · Contenedores de Montevideo (coordenadas) — respaldo geográfico
+
+> En el diseño v2 la capa primaria de contenedores es el snapshot operativo BasuraCero (`dataset/09_levantes/`, con `circuitCode` + `daysWithoutLift` + coords). Este CSV Figshare queda como respaldo geográfico si el ZIP oficial de la IM falla.
 
 ## Fuente
 
@@ -29,10 +31,8 @@
 ## Cobertura temporal y limitaciones
 
 - Instantánea de 2021 o anterior (publicado dic-2021, modificado may-2023).
-  Hay desfase con la red vial OSM (2026); se acepta para el TP y se declara.
-- No informa estado de llenado ni última recolección: por eso `dias_*` se
-  simula y `cantidad_contenedores` es un conteo por cercanía, no una
-  medición de carga.
+  Hay desfase con la red vial IDE (2026) y con la foto operativa BasuraCero; se acepta para el TP como respaldo y se declara.
+- No informa estado de llenado ni última recolección por sí solo: por eso `cantidad_contenedores` es un conteo por cercanía (snap) y `dias_*` viene de BasuraCero (`09_`), no de este CSV.
 - Los duplicados de coordenadas se resuelven en el issue #9 (criterio de
   conteo por tramo a documentar, p. ej. contar filas o colapsar duplicados).
 
