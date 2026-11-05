@@ -25,7 +25,7 @@ Hierholzer / cartero chino. Si el componente conexo mayor queda con menos de
 |---|---|
 | `01_red-vial-osm/` | ZIP de Geofabrik Uruguay (80 MB) + descripción + plan de clip al bbox |
 | `02_contenedores-montevideo/` | `coordenadasContenedores.csv` (11.556 puntos lon,lat) + descripción |
-| `03_reclamos-windsor-referencia/` | CSV de reclamos de Windsor 2025 + descripción; **solo calibración agregada**, no se une a Montevideo |
+| ~~`03_reclamos-windsor-referencia/`~~ | Eliminada: era otra ciudad; sus agregados ya quedaron documentados |
 | `04_esquema-y-regla-etiqueta/` | Esquema `nodos.csv`/`tramos.csv`, regla de etiqueta v1, ejemplos, plan del script |
 
 ## Trazabilidad de lo descargado
@@ -34,7 +34,6 @@ Hierholzer / cartero chino. Si el componente conexo mayor queda con menos de
 |---|---|---|
 | `01_red-vial-osm/uruguay-latest-free.shp.zip` | 80527570 | `37fd738ab8780a0b67add69a2f839fd7d7efd8fc65d0581651d38e3283ea411b` |
 | `02_contenedores-montevideo/coordenadasContenedores.csv` | 612468 | `9b893afb5b6515b55c11b6f0f8fb382f95917c09cd582e0904980a42c02fe7d9` |
-| `03_reclamos-windsor-referencia/Garbage_Not_Collected_2025.csv` | 278071 | `ffa713d17ee4b63a55d2030e5619624cbaca316f0a6c889ea0171f5f93499fbc` |
 
 Verificar con: `sha256sum dataset/*/*`. Servidor Geofabrik: Last-Modified
 Thu, 05 Nov 2026 01:14:17 GMT. Figshare MD5 `20f6ae05b23b0dc4a3be43318e9a4c11`
@@ -79,8 +78,8 @@ Script Python reproducible con semilla fija que:
   misma licencia al redistribuir la base derivada.
 - Figshare (Toyos; Vallcorba): CC BY 4.0, con origen en datos abiertos de la
   Intendencia de Montevideo.
-- Windsor: solo se reutilizan estadísticos agregados; no redistribuir sus
-  filas sin verificar su licencia.
+- Windsor (carpeta eliminada): solo se reutilizaron sus estadísticos
+  agregados históricos; sin filas en el dataset.
 
 ## Git
 
@@ -116,7 +115,8 @@ Plan de unión: 1 (id + circuito + coords) ⋈ 2/3 (id + fecha + levantado)
   no el domiciliario puerta a puerta del TP.
 - Figshare coordenadas: queda como respaldo (ya descargado) si el ZIP
   oficial falla; si no, se usa el oficial.
-- Windsor: otra ciudad; solo se conservan sus estadísticos agregados como
+- Windsor: otra ciudad, carpeta eliminada; sus agregados históricos ya
+  quedaron registrados en `docs/dataset-recoleccion.md` como
   calibración de la simulación, sin filas en el dataset.
 - Residuos en playas (kg/mes): fuera del circuito domiciliario. ❌
 
