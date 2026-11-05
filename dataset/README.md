@@ -118,3 +118,14 @@ Plan de unión: 1 (id + circuito + coords) ⋈ 2/3 (id + fecha + levantado)
   oficial falla; si no, se usa el oficial.
 - Windsor: otra ciudad; solo se conservan sus estadísticos agregados como
   calibración de la simulación, sin filas en el dataset.
+- Residuos en playas (kg/mes): fuera del circuito domiciliario. ❌
+
+### En evaluación (barrido por keywords 05/11/2026)
+
+- **Áreas Liberadas** (IM, 2022–2024, SHP+CSV 3,2 MB): residuos recogidos en
+  sitios de disposición informal, geolocalizado. Candidato como señal
+  auxiliar por tramo (basurales). Falta descargar y ver columnas.
+- **Solicitudes al COM / Montevideo más verde** (IM, 2023–2026, ~100–200 MB
+  por año): solicitudes de limpieza al Centro Operativo. Candidata como
+  fuente alternativa o complemento al SUR para quejas. Falta metadata y
+  verificar solape con SUR.
