@@ -10,7 +10,7 @@ los tramos prioritarios. Decisiones ya tomadas y pendientes, con su issue.
 
 - Dataset **mixto** en zona piloto de Montevideo. Detalle completo:
   `docs/dataset-recoleccion.md`; fuentes y archivos: `dataset/README.md`.
-- Geometría vial real-derivada de OSM + contenedores reales por cercanía;
+- Geometría vial real-derivada de ejes IDE Uruguay + contenedores reales por cercanía;
   operativas simuladas con semilla; etiqueta **construida** con regla v1
   (el modelo aprenderá esa regla: declararlo en el informe).
 - OSM y Figshare/Leaflet no se pisan: el dato vial viene de OSM; Leaflet
