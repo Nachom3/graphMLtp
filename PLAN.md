@@ -24,9 +24,11 @@ Script Python con semilla fija: clip OSM al bbox → grafo + componente conexo
 
 ## Modelo (issue #10, pendiente)
 
-Comparar clasificador visto en clase (p. ej. árbol) contra al menos otro
-(regresión logística / kNN / SVM según `Intro-ML`). Métricas sobre test
-separado: accuracy, precisión, recall, matriz de confusión. Predicciones →
+Comparar `DecisionTreeClassifier` (sesión 4) contra al menos otro del curso
+(`LogisticRegression` multiclase OvR/softmax de sesión 3, `KNeighborsClassifier`
+o `SVC` de sesión 4), con `make_pipeline`+`StandardScaler` donde aplique.
+Métricas de sesión 5 sobre test separado: accuracy, precisión, recall, F1,
+matriz de confusión (+ validación cruzada). Predicciones →
 selección de tramos (p. ej. media o alta) → Hierholzer; si no es euleriano,
 cartero chino (Dijkstra + emparejamiento mínimo).
 

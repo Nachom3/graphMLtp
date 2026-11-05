@@ -54,9 +54,16 @@ no prueba utilidad operativa real y así debe decir el informe.
 
 ## Plan del script (issue #9, detalle)
 
-Lenguaje: Python (pandas + numpy; geoespacial a definir según librerías
-disponibles). Semilla fija y versionada. Pasos: 1) clip OSM al bbox y
+Stack del curso (Intro-ML, sesiones 1–5): Python + numpy, pandas,
+matplotlib y scikit-learn, con notebooks de referencia para
+preprocesamiento, los 4 clasificadores y evaluación. Extras requeridos
+por el TP (fuera del curso, justificados): manipulación geoespacial
+mínima (p. ej. pyproj o parsing propio) y networkx para grafos.
+Semilla fija y versionada. Pasos: 1) clip OSM al bbox y
 construcción del grafo + componente conexo mayor; 2) snap de contenedores;
 3) generación simulada (`tipo_zona`, `dias`, `quejas`); 4) regla v1 y reporte
 de balance; 5) escritura de `nodos.csv`/`tramos.csv` + `README` de
-procedencia. La partición train/test y las métricas son del issue #10.
+procedencia. La partición train/test (sesión 2: `train_test_split`,
+encoding de `tipo_zona` con lo visto en clase) y las métricas
+(sesión 5: accuracy/precisión/recall/F1, matriz, validación cruzada)
+son del issue #10.
