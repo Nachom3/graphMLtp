@@ -62,4 +62,4 @@ L9 — 2026-11-06: T7 prioridad (commit `057de96`). Regla v1 recalibrada: baja�
 
 L10 — 2026-11-06: T8 gates (commit `7069b15`). Esquema, auditoría de categorías (con ejemplos), cobertura bbox, reporte de no-asignados; fallan fuerte.
 
-L11 — 2026-11-06: T9 README + registro (commit siguiente). `dataset/salida/metadata.json` (T0, semilla, sha256, balance), `dataset/salida/README.md` de procedencia, `ai.md`.
+L11 — 2026-11-06: T9 README + registro (commit `7d8546e`). `dataset/salida/metadata.json` (T0, semilla, sha256, balance), `dataset/salida/README.md` de procedencia, `ai.md`.
