@@ -13,6 +13,7 @@ Uso:
 
 from __future__ import annotations
 
+import csv
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -67,6 +68,49 @@ SMARTWASTE_CSV = (
 # Contenedores mas lejos quedan no-asignados (cuarentena). En el piloto todos
 # los contenedores estan a < 11 m del eje mas cercano.
 SNAP_RADIUS_M = 25.0
+
+QUEJAS_CSV = DATASET_DIR / "07_reclamos-sur" / "pormibarrio_reports.csv"
+
+# Categorias de residuos de Por Mi Barrio (taxonomia auditada, issue #8 / README 07).
+# Se excluyen poda/arbol/playa (otro circuito).
+RESIDUO_CATEGORIAS = frozenset({
+    "Basural",
+    "Basural de grandes dimensiones",
+    "Contenedor desbordado",
+    "Contenedor en mal estado",
+    "Contenedor fue movido por vecino o vecina",
+    "Contenedor lleno",
+    "Contenedor lleno o desbordado",
+    "Contenedor obstruye o dificulta la circulación en: rampa, tránsito, vereda o área de construcción",
+    "Contenedor roto",
+    "Contenedor sucio",
+    "Denuncia por sacar basuras extraordinaria fuera de fecha",
+    "Falta barrido",
+    "Falta de barrido",
+    "Falta de barrido en avenidas y bulevares",
+    "Falta de barrido en calles internas",
+    "Falta de contenedores en la zona",
+    "Falta de levante manual de residuos",
+    "Falta de levante manual de residuos domiciliarios",
+    "Falta de limpieza en rambla",
+    "Levante basurales",
+    "Papelera en mal estado",
+    "Presencia de basural",
+    "Recolección fuera de hora",
+    "Residuo fuera del contenedor",
+    "Residuos en la vía pública",
+    "Residuos fuera del contenedor",
+    "Residuos fuera del contenedor por capacidad insuficiente",
+    "Residuos fuera del contenedor por uso indebido/clasificador",
+    "Solicitar contenedor adicional",
+    "Solicitar contenedor adicional en la vía pública",
+    "Solicitar contenedor para residuos reciclables",
+    "Solicitar traslado de contenedor",
+    "Solicitud de retiro de escombros",
+    "Traslado de contenedor",
+    "Uso no autorizado por comercios y similares",
+    "Volqueta privada desbordada",
+})
 
 SRC_CRS = "EPSG:32721"  # UTM 21S (origen de los ejes IDE)
 DST_CRS = "EPSG:4326"  # WGS84 (salida + clip)
@@ -322,6 +366,15 @@ def _load_json(path) -> list:
         raise SystemExit(f"JSON invalido en {path}: {err}") from err
 
 
+def _read_csv(path) -> list[dict]:
+    """CSV de entrada con error claro si falta (campos con espacios iniciales)."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return list(csv.DictReader(f, skipinitialspace=True))
+    except FileNotFoundError as err:
+        raise SystemExit(f"Falta archivo de entrada: {path}") from err
+
+
 def load_containers() -> list[dict]:
     """Lee 09_levantes/containers.json (foto T0 en WGS84)."""
     raw = _load_json(CONTAINERS_JSON)
@@ -343,6 +396,20 @@ def _in_bbox(lon: float, lat: float) -> bool:
     )
 
 
+def _nearest_tramo(tramos: list[dict], lon: float, lat: float) -> tuple[str, float]:
+    """(tramo_id, dist_m) del tramo mas cercano a (lon, lat)."""
+    x, y = _INV.transform(lon, lat)
+    pt = Point(x, y)
+    best_d = float("inf")
+    best_tid = ""
+    for t in tramos:
+        d = round(t["utm"].distance(pt), 3)
+        if (d, t["tramo_id"]) < (best_d, best_tid):
+            best_d = d
+            best_tid = t["tramo_id"]
+    return best_tid, best_d
+
+
 def snap_containers(
     tramos: list[dict], containers: list[dict]
 ) -> tuple[list, list, list]:
@@ -359,20 +426,12 @@ def snap_containers(
     unassigned = []
     dists = []
     for c in containers:
-        x, y = _INV.transform(c["long"], c["lat"])
-        pt = Point(x, y)
-        best_d = float("inf")
-        best_tid = ""
-        for t in tramos:
-            d = round(t["utm"].distance(pt), 3)
-            if (d, t["tramo_id"]) < (best_d, best_tid):
-                best_d = d
-                best_tid = t["tramo_id"]
-        if best_d > SNAP_RADIUS_M:
+        tid, d = _nearest_tramo(tramos, c["long"], c["lat"])
+        if d > SNAP_RADIUS_M:
             unassigned.append(c)
         else:
-            assignments.append((best_tid, c))
-            dists.append(best_d)
+            assignments.append((tid, c))
+            dists.append(d)
     return assignments, unassigned, dists
 
 
@@ -430,6 +489,69 @@ def crosscheck_smartwaste() -> dict[str, int]:
 
 
 # --------------------------------------------------------------------------- #
+# Etapa 3: quejas (historico_quejas_vecinales)
+# --------------------------------------------------------------------------- #
+def load_quejas() -> list[dict]:
+    """Lee 07_reclamos-sur/pormibarrio_reports.csv y filtra categorias de residuos.
+
+    Decidido (issue #9): se usa el historico real completo 2014-2020 de Por Mi
+    Barrio. La ventana [T0-30d, T0) es vacia porque la fuente termina en 2020;
+    la brecha temporal se documenta como limitacion.
+    """
+    rows = _read_csv(QUEJAS_CSV)
+
+    def _f(s):
+        try:
+            return float(s)
+        except (TypeError, ValueError):
+            return None
+
+    out = []
+    for r in rows:
+        if r["category"] not in RESIDUO_CATEGORIAS:
+            continue
+        out.append(
+            {
+                "category": r["category"],
+                "lat": _f(r["latitude"]),
+                "lon": _f(r["longitude"]),
+                "whensent": (r["whensent"] or "").strip(),
+                "id": r["id"],
+            }
+        )
+    return out
+
+
+def dedupe_quejas(quejas: list[dict]) -> list[dict]:
+    """Deduplica reportes exactos (categoria + coord 5 decimales + whensent)."""
+    seen = set()
+    out = []
+    for q in quejas:
+        k = (round(q["lat"], 5), round(q["lon"], 5), q["category"], q["whensent"])
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(q)
+    return out
+
+
+def snap_quejas(tramos: list[dict], quejas: list[dict]) -> tuple[list, list]:
+    """Asigna cada queja (con coords validas) al tramo mas cercano.
+
+    Devuelve (assignments, unassigned): mismo radio y desempate que contenedores.
+    """
+    assignments = []
+    unassigned = []
+    for q in quejas:
+        tid, d = _nearest_tramo(tramos, q["lon"], q["lat"])
+        if d > SNAP_RADIUS_M:
+            unassigned.append(q)
+        else:
+            assignments.append((tid, q))
+    return assignments, unassigned
+
+
+# --------------------------------------------------------------------------- #
 # Salida
 # --------------------------------------------------------------------------- #
 TRAMOS_COLUMNS = [
@@ -440,6 +562,7 @@ TRAMOS_COLUMNS = [
     "nombre_calle",
     "cantidad_contenedores",
     "dias_desde_ultima_recoleccion",
+    "historico_quejas_vecinales",
 ]
 
 
@@ -490,6 +613,28 @@ def main() -> None:
     print(
         f"SmartWaste (cross-check): {sum(sw.values())} cont en piloto, {len(sw)} circuitos"
     )
+
+    # --- Etapa 3: quejas ---
+    quejas_all = load_quejas()
+    q_invalid = [q for q in quejas_all if q["lat"] is None or q["lon"] is None]
+    q_valid_all = [q for q in quejas_all if q["lat"] is not None and q["lon"] is not None]
+    q_valid = dedupe_quejas(q_valid_all)
+    q_dedup = len(q_valid_all) - len(q_valid)
+    q_pilot = [q for q in q_valid if _in_bbox(q["lon"], q["lat"])]
+    q_assign, q_unassigned = snap_quejas(tramos, q_pilot)
+    q_counts = Counter(tid for tid, _q in q_assign)
+    for t in tramos:
+        t["historico_quejas_vecinales"] = q_counts.get(t["tramo_id"], 0)
+    print(
+        f"quejas residuos totales: {len(quejas_all)} | coords invalidas (cuarentena): "
+        f"{len(q_invalid)} | dedup: {q_dedup}"
+    )
+    print(
+        f"quejas en piloto: {len(q_pilot)} | asignadas: {len(q_assign)} | "
+        f"no-asignadas (cuarentena): {len(q_unassigned)}"
+    )
+    q_dist = Counter(q_counts.values())
+    print(f"historico_quejas_vecinales dist: {dict(sorted(q_dist.items()))}")
 
     write_outputs(nodos, tramos)
     print(f"-> {SALIDA_DIR / 'nodos.csv'}")
