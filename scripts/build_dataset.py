@@ -626,6 +626,87 @@ def write_outputs(nodos: list[dict], tramos: list[dict]) -> None:
     pd.DataFrame(tramos)[TRAMOS_COLUMNS].to_csv(SALIDA_DIR / "tramos.csv", index=False)
 
 
+# --------------------------------------------------------------------------- #
+# Etapa 6: gates de calidad (fallan fuerte)
+# --------------------------------------------------------------------------- #
+def audit_categorias() -> None:
+    """Audita la taxonomia de residuos (revision de ejemplos incluida)."""
+    rows = _read_csv(QUEJAS_CSV)
+    all_counts = Counter(r["category"] for r in rows)
+    residuos = sorted((c, all_counts[c]) for c in RESIDUO_CATEGORIAS if c in all_counts)
+    total = sum(n for _c, n in residuos)
+    if total < 1000:
+        raise SystemExit(f"[GATE] taxonomia de residuos sospechosa: solo {total} reportes")
+    print(f"[GATE] categorias residuos: {len(residuos)} categorias, {total} reportes")
+    for c, n in residuos:
+        print(f"    {n:5d}  {c}")
+    excluidas = [
+        "Problemas aereos / poda / enfermedades",
+        "Solicitud de retiro de podas",
+        "Solicitud de poda",
+        "Poda de emergencia",
+        "Falta de limpieza en playa",
+        "Plantación",
+        "Arbol deteriorado / riesgoso / extraccion",
+        "Mantenimiento de áreas verdes",
+    ]
+    print("[GATE] excluidas (adyacentes revisadas, NO residuos):")
+    for c in excluidas:
+        print(f"    {all_counts.get(c, 0):5d}  {c}")
+    ej = next((r for r in rows if r["category"] in RESIDUO_CATEGORIAS and r["title"]), None)
+    if ej:
+        print(f"[GATE] ejemplo residuos: '{ej['title'][:60]}' ({ej['category']})")
+
+
+def quality_gates(nodos: list[dict], tramos: list[dict], audit: dict) -> None:
+    """Gates de calidad. Falla fuerte (SystemExit) si esquema/cobertura no cierran."""
+    errors = []
+    nids = {n["nodo_id"] for n in nodos}
+    if sorted(nodos[0].keys()) != ["lat", "lon", "nodo_id"]:
+        errors.append(f"nodos.csv columnas: {sorted(nodos[0].keys())}")
+    if len(nids) != len(nodos):
+        errors.append("nodo_id duplicados")
+    if sorted(tramos[0].keys()) != sorted(TRAMOS_COLUMNS):
+        errors.append(f"tramos.csv columnas: {sorted(tramos[0].keys())}")
+    tids = [t["tramo_id"] for t in tramos]
+    if len(set(tids)) != len(tids):
+        errors.append("tramo_id duplicados")
+    margen = 1e-5
+    for n in nodos:
+        if not (
+            BBOX_WGS["o"] - margen <= n["lon"] <= BBOX_WGS["e"] + margen
+            and BBOX_WGS["s"] - margen <= n["lat"] <= BBOX_WGS["n"] + margen
+        ):
+            errors.append(f"nodo fuera de bbox: {n['nodo_id']} ({n['lon']},{n['lat']})")
+    for t in tramos:
+        if t["nodo_origen"] not in nids or t["nodo_destino"] not in nids:
+            errors.append(f"FK rota en {t['tramo_id']}")
+        if t["nodo_origen"] == t["nodo_destino"]:
+            errors.append(f"self-loop en {t['tramo_id']}")
+        if t["longitud_m"] <= 0:
+            errors.append(f"longitud_m <= 0 en {t['tramo_id']}")
+        if (
+            t["cantidad_contenedores"] < 0
+            or t["dias_desde_ultima_recoleccion"] < 0
+            or t["historico_quejas_vecinales"] < 0
+        ):
+            errors.append(f"feature negativa en {t['tramo_id']}")
+        if t["tipo_zona"] not in ZONA_W:
+            errors.append(f"tipo_zona invalida: {t['tramo_id']}")
+        if t["prioridad_recoleccion"] not in ("baja", "media", "alta"):
+            errors.append(f"prioridad invalida: {t['tramo_id']}")
+    if errors:
+        for e in errors:
+            print(f"[GATE] FALLIDO: {e}")
+        raise SystemExit(1)
+    print(f"[GATE] esquema OK ({len(nodos)} nodos, {len(tramos)} tramos), cobertura OK")
+    print(
+        f"[GATE] no-asignados -> contenedores: {audit['contenedores_no_asignados']} | "
+        f"quejas: {audit['quejas_no_asignadas']} (coords invalidas {audit['quejas_coords_invalidas']}, "
+        f"fuera de radio {audit['quejas_fuera_radio']})"
+    )
+
+
 def main() -> None:
     ejes = load_ejes()
     print(f"ejes unicos (dedupe reftramo): {len(ejes)}")
@@ -701,6 +782,20 @@ def main() -> None:
     prio_dist = Counter(t["prioridad_recoleccion"] for t in tramos)
     pct_p = ", ".join(f"{k} {v / len(tramos) * 100:.1f}%" for k, v in sorted(prio_dist.items()))
     print(f"prioridad_recoleccion (regla v1 recalibrada): {dict(sorted(prio_dist.items()))} -> {pct_p}")
+
+    # "utm" (geometria interna del snap) ya no se necesita
+    for t in tramos:
+        t.pop("utm", None)
+
+    # --- Etapa 6: gates de calidad ---
+    audit_categorias()
+    audit = {
+        "contenedores_no_asignados": len(unassigned),
+        "quejas_no_asignadas": len(q_unassigned),
+        "quejas_coords_invalidas": len(q_invalid),
+        "quejas_fuera_radio": len(q_unassigned),
+    }
+    quality_gates(nodos, tramos, audit)
 
     write_outputs(nodos, tramos)
     print(f"-> {SALIDA_DIR / 'nodos.csv'}")
