@@ -63,3 +63,5 @@ L9 — 2026-11-06: T7 prioridad (commit `057de96`). Regla v1 recalibrada: baja�
 L10 — 2026-11-06: T8 gates (commit `7069b15`). Esquema, auditoría de categorías (con ejemplos), cobertura bbox, reporte de no-asignados; fallan fuerte.
 
 L11 — 2026-11-06: T9 README + registro (commit `7d8546e`). `dataset/salida/metadata.json` (T0, semilla, sha256, balance), `dataset/salida/README.md` de procedencia, `ai.md`.
+
+L12 — 2026-11-06: decisión @renzo23rc: "vamos a hacer una cosa, borra todas las quejas, no sirven". Se elimina `historico_quejas_vecinales` del esquema y del script. La regla v1 pasa a `score = 2*dias + 1*contenedores + zona_w` (sin 3*quejas), umbrales baja≤0/media 1-2/alta≥3, balance final 43.4/42.1/14.5. La decisión L2 (quejas histórico real) queda revertida.

@@ -12,7 +12,7 @@ T0, semilla, versiones de archivos (sha256) y balance de clases están en
 
 Esquema de `tramos.csv`: `tramo_id, nodo_origen, nodo_destino, longitud_m,
 nombre_calle, tipo_zona, cantidad_contenedores, dias_desde_ultima_recoleccion,
-historico_quejas_vecinales, prioridad_recoleccion`.
+prioridad_recoleccion`.
 
 ## Foto T0 y semilla
 
@@ -32,39 +32,36 @@ historico_quejas_vecinales, prioridad_recoleccion`.
    `CH_DU_RM_CL_*` coinciden con SmartWaste (131 cont., misma distribución).
 3. **dias_desde_ultima_recoleccion**: real desde `daysWithoutLift`. Agregación
    por tramo = **máximo** (el contenedor más atrasado define la urgencia).
-4. **historico_quejas_vecinales**: real, **histórico completo 2014–2020** de
-   Por Mi Barrio (36 categorías de residuos). Dedup de reportes exactos
-   (19 filas). La ventana `[T0−30d, T0)` es **vacía** porque la fuente termina
-   en 2020-04; brecha temporal documentada como limitación. No-asignados en
-   cuarentena (se reportan, no se inventan).
-5. **tipo_zona**: simulada 60/25/15 con semilla 42 (única variable simulada
+4. **tipo_zona**: simulada 60/25/15 con semilla 42 (única variable simulada
    por diseño).
-6. **prioridad_recoleccion**: regla v1 recalibrada (abajo).
+5. **prioridad_recoleccion**: regla v1 recalibrada (abajo).
+
+> Nota: `historico_quejas_vecinales` se **eliminó por decisión del equipo**
+> (las quejas de Por Mi Barrio "no sirven"): la fuente termina en 2020 y no
+> aportaba señal en la foto T0. Ver Log del feature doc.
 
 ## Regla v1 y recalibración
 
 ```text
-score = 2*dias + 3*quejas + 1*contenedores + zona_w  (comercial 2, industrial 1, residencial 0)
+score = 2*dias + 1*contenedores + zona_w  (comercial 2, industrial 1, residencial 0)
 ```
 
 | Umbrales | baja | media | alta | Balance |
 |---|---|---|---|---|
 | Original (issue #8) | ≤ 10 | 11–16 | ≥ 17 | 99.7 / 0.3 / 0.0 |
-| **Recalibrada** | ≤ 0 | 1–2 | ≥ 3 | **41.8 / 37.4 / 20.9** |
+| **Recalibrada** | ≤ 0 | 1–2 | ≥ 3 | **43.4 / 42.1 / 14.5** |
 
-La original daba 99.7 % "baja" con los datos reales (el score real llega a
-14): se recalibró y se registran umbrales + balance final.
+La original (con `3*quejas`) daba 99.7 % "baja" con los datos reales. Sin
+quejas, el score real llega a 7 y se recalibró a estos umbrales.
 
 ## Balance de clases
 
 - `tipo_zona`: residencial 62.3 % / comercial 24.6 % / industrial 13.1 %.
-- `prioridad_recoleccion`: baja 41.8 % / media 37.4 % / alta 20.9 %.
+- `prioridad_recoleccion`: baja 43.4 % / media 42.1 % / alta 14.5 %.
 
 ## No-asignados (cuarentena)
 
 - Contenedores: **0** (todos < 11 m del eje más cercano).
-- Quejas: **19** con coordenadas inválidas (filas desalineadas del CSV) +
-  **1** fuera del radio de 25 m = 20 reportadas, no inventadas.
 
 ## Trazabilidad (sha256 de fuentes)
 
@@ -72,7 +69,6 @@ La original daba 99.7 % "baja" con los datos reales (el score real llega a
 |---|---|---|
 | `11_ejes-ide/ejes_montevideo.csv` | 11.299.973 | `b2fa87f2…cb60b` |
 | `09_levantes/containers.json` | 1.496.837 | `6da312ed…d8db8` |
-| `07_reclamos-sur/pormibarrio_reports.csv` | 1.836.062 | `bbe50f8f…29b75` |
 | `10_smartwaste-mvd/…/containers_wgs84.csv` | 4.682.865 | `c4a46a9a…6ffb` |
 | `10_smartwaste-mvd/…/circuits_enriched.json` | 68.486 | `b5073929…84f` |
 
@@ -92,12 +88,12 @@ calidad fallan fuerte si algo no cierra).
 
 - La prioridad es construida para enseñar; no es el criterio oficial del
   municipio.
-- `dias_*` y quejas son reales pero la foto es única (sin series temporales).
-- Desfase temporal: red vial 2026, contenedores/quejas de instantáneas 2021–2026.
+- `dias_*` es real pero la foto es única (sin series temporales).
+- Desfase temporal: red vial 2026, contenedores de instantáneas 2021–2026.
 
 ## Licencias / atribución
 
 Ejes IDE Uruguay (catálogo nacional) + OSM Geofabrik (ODbL) de respaldo;
 contenedores/levantes de la Intendencia de Montevideo (DAG-UY, espejo
-BasuraCero); SmartWaste Mendeley DOI `10.17632/d2pw5j592y.1`; reclamos Por Mi
-Barrio (Data Uruguay). Atribución completa en `dataset/README.md`.
+BasuraCero); SmartWaste Mendeley DOI `10.17632/d2pw5j592y.1`. Atribución
+completa en `dataset/README.md`.
