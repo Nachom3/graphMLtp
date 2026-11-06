@@ -65,3 +65,5 @@ L10 — 2026-11-06: T8 gates (commit `7069b15`). Esquema, auditoría de categor�
 L11 — 2026-11-06: T9 README + registro (commit `7d8546e`). `dataset/salida/metadata.json` (T0, semilla, sha256, balance), `dataset/salida/README.md` de procedencia, `ai.md`.
 
 L12 — 2026-11-06: decisión @renzo23rc: "vamos a hacer una cosa, borra todas las quejas, no sirven". Se elimina `historico_quejas_vecinales` del esquema y del script. La regla v1 pasa a `score = 2*dias + 1*contenedores + zona_w` (sin 3*quejas), umbrales baja≤0/media 1-2/alta≥3, balance final 43.4/42.1/14.5. La decisión L2 (quejas histórico real) queda revertida.
+
+L13 — 2026-11-06: se borra la fuente `dataset/07_reclamos-sur/` (pormibarrio_reports.csv + README), completando "borra todas las quejas". Docs de definición (04_esquema, dataset/README.md, docs/dataset-recoleccion.md) actualizados sin quejas.
