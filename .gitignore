@@ -1,1 +1,6 @@
 ./atl
+
+# Python (entorno virtual y caché)
+.venv/
+__pycache__/
+*.pyc

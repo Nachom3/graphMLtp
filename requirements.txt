@@ -1,0 +1,9 @@
+# Dependencias de scripts/build_dataset.py (issue #9)
+# Reproducible: usar `python -m venv .venv && .venv/bin/pip install -r requirements.txt`
+pandas==3.1.1
+numpy==2.5.4
+networkx==3.7
+pyproj==3.8.0
+shapely==2.2.0
+python-dateutil==4.0.0
+tzdata==2026.6
