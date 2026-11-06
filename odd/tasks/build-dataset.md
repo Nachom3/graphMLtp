@@ -47,3 +47,19 @@ Fuera de scope: entrenar modelos (#10), backend/API/frontend, nuevas fuentes, re
 L2 — 2026-11-06: decisión `historico_quejas_vecinales` = histórico real completo (2014–2020), no simulado; brecha temporal documentada. (Elegido por @renzo23rc.)
 
 L3 — 2026-11-06: "@renzo23rc: avancemos" (autorización para implementar commit a commit).
+
+L4 — 2026-11-06: T2 grafo (commit `8230474`). 297 tramos / 209 nodos, componente conexo unico. Dedupe 3.126 reftramos. 2 T-junctions nodificadas (split+snap 0.5 m).
+
+L5 — 2026-11-06: T3 contenedores (commit `e722131`). Snap 129 contenedores (09_levantes), radio 25 m, desempate menor tramo_id. 129/129 asignados, 0 no-asignados, dist 1.7–11.0 m, 87 tramos con contenedores (dist 0→210, 1→51, 2→30, 3→6). Cross-check SmartWaste: 131 cont / mismos 6 circuitos CH_*.
+
+L6 — 2026-11-06: T4 dias (commit `3205dbf`). Real desde daysWithoutLift, agregación máximo por tramo (el contenedor más atrasado define la urgencia). 275 tramos con 0 días, 22 con 1.
+
+L7 — 2026-11-06: T5 quejas (commit `78eaa19`). Histórico real completo 2014–2020, taxonomía 36 categorías, 1.840 reportes; dedup 19 filas, 19 coords inválidas, 1 fuera de radio → cuarentena. 29 quejas en 22 tramos.
+
+L8 — 2026-11-06: T6 tipo_zona (commit `6b6a1ef`). Simulada 60/25/15 con seed 42. Realizado 62.3/24.6/13.1 (n=297).
+
+L9 — 2026-11-06: T7 prioridad (commit `057de96`). Regla v1 recalibrada: baja≤0, media 1–2, alta≥3 (original ≤10/11-16/≥17 daba 99.7% baja; score real max 14). Balance final 41.8/37.4/20.9.
+
+L10 — 2026-11-06: T8 gates (commit `7069b15`). Esquema, auditoría de categorías (con ejemplos), cobertura bbox, reporte de no-asignados; fallan fuerte.
+
+L11 — 2026-11-06: T9 README + registro (commit siguiente). `dataset/salida/metadata.json` (T0, semilla, sha256, balance), `dataset/salida/README.md` de procedencia, `ai.md`.

@@ -14,6 +14,7 @@ Uso:
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -626,6 +627,54 @@ def write_outputs(nodos: list[dict], tramos: list[dict]) -> None:
     pd.DataFrame(tramos)[TRAMOS_COLUMNS].to_csv(SALIDA_DIR / "tramos.csv", index=False)
 
 
+def _sha256(path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def write_metadata(nodos: list[dict], tramos: list[dict], audit: dict, zona_dist, prio_dist) -> None:
+    """Escribe dataset/salida/metadata.json: foto T0, semilla, versiones (sha256)
+    y balance de clases."""
+    inputs = {
+        "11_ejes-ide/ejes_montevideo.csv": EJES_CSV,
+        "09_levantes/containers.json": CONTAINERS_JSON,
+        "07_reclamos-sur/pormibarrio_reports.csv": QUEJAS_CSV,
+        "10_smartwaste-mvd/containers_wgs84.csv": SMARTWASTE_CSV,
+    }
+    n = len(tramos)
+    meta = {
+        "t0": T0,
+        "seed": SEED,
+        "bbox_wgs84": BBOX_WGS,
+        "regla_v1": {
+            "score": "2*dias + 3*quejas + 1*contenedores + zona_w (comercial 2, industrial 1, residencial 0)",
+            "umbrales_originales": {"baja_max": 10, "media_max": 16},
+            "umbrales_recalibrados": {"baja_max": PRIORIDAD_BAJA_MAX, "media_max": PRIORIDAD_MEDIA_MAX},
+            "nota": "recalibrada: la original daba 99.7% baja con datos reales (score max 14)",
+        },
+        "conteos": {
+            "nodos": len(nodos),
+            "tramos": n,
+            "contenedores_piloto": audit["contenedores_piloto"],
+            "quejas_residuos_totales": audit["quejas_totales"],
+        },
+        "balance_tipo_zona": {k: {"n": v, "pct": round(v / n * 100, 1)} for k, v in sorted(zona_dist.items())},
+        "balance_prioridad": {k: {"n": v, "pct": round(v / n * 100, 1)} for k, v in sorted(prio_dist.items())},
+        "no_asignados": {
+            "contenedores": audit["contenedores_no_asignados"],
+            "quejas_fuera_radio": audit["quejas_fuera_radio"],
+            "quejas_coords_invalidas": audit["quejas_coords_invalidas"],
+        },
+        "input_sha256": {k: _sha256(p) for k, p in inputs.items()},
+        "output_sha256": {
+            "nodos.csv": _sha256(SALIDA_DIR / "nodos.csv"),
+            "tramos.csv": _sha256(SALIDA_DIR / "tramos.csv"),
+        },
+    }
+    (SALIDA_DIR / "metadata.json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Etapa 6: gates de calidad (fallan fuerte)
 # --------------------------------------------------------------------------- #
@@ -790,7 +839,9 @@ def main() -> None:
     # --- Etapa 6: gates de calidad ---
     audit_categorias()
     audit = {
+        "contenedores_piloto": len(containers),
         "contenedores_no_asignados": len(unassigned),
+        "quejas_totales": len(quejas_all),
         "quejas_no_asignadas": len(q_unassigned),
         "quejas_coords_invalidas": len(q_invalid),
         "quejas_fuera_radio": len(q_unassigned),
@@ -798,8 +849,10 @@ def main() -> None:
     quality_gates(nodos, tramos, audit)
 
     write_outputs(nodos, tramos)
+    write_metadata(nodos, tramos, audit, zona_dist, prio_dist)
     print(f"-> {SALIDA_DIR / 'nodos.csv'}")
     print(f"-> {SALIDA_DIR / 'tramos.csv'}")
+    print(f"-> {SALIDA_DIR / 'metadata.json'}")
 
 
 if __name__ == "__main__":
