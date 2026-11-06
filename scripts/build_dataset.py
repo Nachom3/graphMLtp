@@ -569,6 +569,40 @@ def assign_tipo_zona(tramos: list[dict], seed: int = SEED) -> None:
         t["tipo_zona"] = z
 
 
+# Regla v1 (issue #8) RECALIBRADA sobre datos reales. La version original
+# (baja<=10, media 11-16, alta>=17) con datos reales daba 99.7% baja / 0.3%
+# media / 0% alta. Umbrales recalibrados -> balance 41.8/37.4/20.9.
+ZONA_W = {"residencial": 0, "industrial": 1, "comercial": 2}
+PRIORIDAD_BAJA_MAX = 0
+PRIORIDAD_MEDIA_MAX = 2
+
+
+# --------------------------------------------------------------------------- #
+# Etapa 5: prioridad_recoleccion (regla v1 recalibrada)
+# --------------------------------------------------------------------------- #
+def assign_prioridad(tramos: list[dict]) -> None:
+    """Aplica la regla v1 (score = 2*dias + 3*quejas + contenedores + zona_w)
+    con umbrales recalibrados: baja si score <= 0, media si 1-2, alta si >= 3.
+
+    La regla original (baja<=10, media 11-16, alta>=17) sobre los datos reales
+    del piloto daba 99.7% baja (el score real llega a 14): se recalibro y se
+    registra el balance final (ver Log del feature doc).
+    """
+    for t in tramos:
+        score = (
+            2 * t["dias_desde_ultima_recoleccion"]
+            + 3 * t["historico_quejas_vecinales"]
+            + 1 * t["cantidad_contenedores"]
+            + ZONA_W[t["tipo_zona"]]
+        )
+        if score <= PRIORIDAD_BAJA_MAX:
+            t["prioridad_recoleccion"] = "baja"
+        elif score <= PRIORIDAD_MEDIA_MAX:
+            t["prioridad_recoleccion"] = "media"
+        else:
+            t["prioridad_recoleccion"] = "alta"
+
+
 # --------------------------------------------------------------------------- #
 # Salida
 # --------------------------------------------------------------------------- #
@@ -582,6 +616,7 @@ TRAMOS_COLUMNS = [
     "cantidad_contenedores",
     "dias_desde_ultima_recoleccion",
     "historico_quejas_vecinales",
+    "prioridad_recoleccion",
 ]
 
 
@@ -660,6 +695,12 @@ def main() -> None:
     zona_dist = Counter(t["tipo_zona"] for t in tramos)
     pct = ", ".join(f"{k} {v / len(tramos) * 100:.1f}%" for k, v in sorted(zona_dist.items()))
     print(f"tipo_zona (simulada, seed {SEED}): {dict(sorted(zona_dist.items()))} -> {pct}")
+
+    # --- Etapa 5: prioridad_recoleccion (regla v1 recalibrada) ---
+    assign_prioridad(tramos)
+    prio_dist = Counter(t["prioridad_recoleccion"] for t in tramos)
+    pct_p = ", ".join(f"{k} {v / len(tramos) * 100:.1f}%" for k, v in sorted(prio_dist.items()))
+    print(f"prioridad_recoleccion (regla v1 recalibrada): {dict(sorted(prio_dist.items()))} -> {pct_p}")
 
     write_outputs(nodos, tramos)
     print(f"-> {SALIDA_DIR / 'nodos.csv'}")
