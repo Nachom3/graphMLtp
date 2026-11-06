@@ -50,6 +50,11 @@ FastAPI (ver `lineamentos.md`): expone preparación, modelo y grafos por API;
 el frontend consume esa API. Camino crítico: CSV + pandas + sklearn, FastAPI solo como API, sin DB en v1; sin SQLAlchemy / sin ORM / sin MySQL. Atribución obligatoria: IDE Uruguay + OpenStreetMap (ODbL, respaldo) +
 Figshare CC BY 4.0 + IM/BasuraCero (DAG-UY).
 
+Issue #12 (esta branch): capas en `docs/architecture/backend.md`, contrato
+API v1 en `docs/contracts/api-v1.md`, código en `backend/src/recoleccion/`,
+notebook en `notebooks/12_arquitectura_backend.ipynb`. Ejecución: ver
+`backend/README.md`.
+
 ## Orden de trabajo
 
 1. #8 Cerrar definición (este plan + `dataset/` + revisión pendiente).
