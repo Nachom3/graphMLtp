@@ -351,7 +351,7 @@ def snap_containers(
     Desempate: menor distancia; a igualdad (< 1 mm), menor tramo_id.
     Radio maximo SNAP_RADIUS_M; mas lejos -> no-asignado (cuarentena).
     Devuelve (assignments, unassigned, dists):
-      assignments: lista (tramo_id, circuitCode)
+      assignments: lista (tramo_id, contenedor)
       unassigned:  lista de contenedores fuera de radio
       dists:       distancias (m) de los asignados (reporte)
     """
@@ -371,9 +371,18 @@ def snap_containers(
         if best_d > SNAP_RADIUS_M:
             unassigned.append(c)
         else:
-            assignments.append((best_tid, c["circuitCode"]))
+            assignments.append((best_tid, c))
             dists.append(best_d)
     return assignments, unassigned, dists
+
+
+def aggregate_dias(assignments: list) -> dict[str, int]:
+    """dias_desde_ultima_recoleccion por tramo: maximo daysWithoutLift de sus
+    contenedores (el contenedor mas atrasado define la urgencia del tramo)."""
+    agg = {}
+    for tid, c in assignments:
+        agg[tid] = max(agg.get(tid, 0), c["daysWithoutLift"])
+    return agg
 
 
 def validate_circuits(tramos: list[dict], assignments: list) -> dict:
@@ -384,7 +393,8 @@ def validate_circuits(tramos: list[dict], assignments: list) -> dict:
         g.add_edge(t["nodo_origen"], t["nodo_destino"], tramo_id=t["tramo_id"])
     circuit_tramos = defaultdict(set)
     circuit_cont = Counter()
-    for tid, code in assignments:
+    for tid, c in assignments:
+        code = c["circuitCode"]
         circuit_tramos[code].add(tid)
         circuit_cont[code] += 1
     report = {}
@@ -429,6 +439,7 @@ TRAMOS_COLUMNS = [
     "longitud_m",
     "nombre_calle",
     "cantidad_contenedores",
+    "dias_desde_ultima_recoleccion",
 ]
 
 
@@ -455,15 +466,19 @@ def main() -> None:
     print(f"contenedores en el piloto: {len(containers)}")
 
     assignments, unassigned, dists = snap_containers(tramos, containers)
-    counts = Counter(tid for tid, _code in assignments)
+    counts = Counter(tid for tid, _c in assignments)
+    dias = aggregate_dias(assignments)
     for t in tramos:
         t["cantidad_contenedores"] = counts.get(t["tramo_id"], 0)
+        t["dias_desde_ultima_recoleccion"] = dias.get(t["tramo_id"], 0)
 
     n_tramos = sum(1 for v in counts.values() if v > 0)
     print(f"asignados: {len(assignments)} | no-asignados: {len(unassigned)}")
     print(f"tramos con >=1 contenedor: {n_tramos}")
     if dists:
         print(f"dist snap: min {min(dists):.1f} m, max {max(dists):.1f} m")
+    dias_dist = Counter(dias.values())
+    print(f"dias_desde_ultima_recoleccion (max por tramo): {dict(sorted(dias_dist.items()))}")
 
     circuits = validate_circuits(tramos, assignments)
     for code in sorted(circuits):
