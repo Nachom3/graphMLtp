@@ -13,6 +13,8 @@ Uso:
 
 from __future__ import annotations
 
+import json
+from collections import Counter, defaultdict
 from pathlib import Path
 
 import networkx as nx
@@ -51,6 +53,20 @@ MIN_SEG_LEN_M = 1.0
 T0 = "2026-10-23"
 
 EJES_CSV = DATASET_DIR / "11_ejes-ide" / "ejes_montevideo.csv"
+CONTAINERS_JSON = DATASET_DIR / "09_levantes" / "containers.json"
+SMARTWASTE_CSV = (
+    DATASET_DIR
+    / "10_smartwaste-mvd"
+    / "smartwaste-mvd-data"
+    / "data"
+    / "processed"
+    / "containers_wgs84.csv"
+)
+
+# Radio maximo (m, UTM) para asignar un contenedor al tramo mas cercano.
+# Contenedores mas lejos quedan no-asignados (cuarentena). En el piloto todos
+# los contenedores estan a < 11 m del eje mas cercano.
+SNAP_RADIUS_M = 25.0
 
 SRC_CRS = "EPSG:32721"  # UTM 21S (origen de los ejes IDE)
 DST_CRS = "EPSG:4326"  # WGS84 (salida + clip)
@@ -164,8 +180,8 @@ def node_and_split(fragments: list[dict]) -> list[dict]:
 
     Cada sub-segmento = {"reftramo", "nombre", "utm": LineString UTM,
     "frag_idx": orden del sub-segmento a lo largo del eje original}.
-    Los 8 cruces a media arista del piloto (donde dos ejes se cruzan sin
-    compartir endpoint) se "nodifican" aqui para que el grafo sea planar.
+    Un cruce donde un eje toca a otro sin compartir endpoint (T-junction o
+    cruce a media arista) se "nodifica" aqui para que el grafo sea planar.
     """
     geoms = [f["utm"] for f in fragments]
 
@@ -286,18 +302,140 @@ def build_graph(sub_segments: list[dict]) -> tuple[list[dict], list[dict]]:
                 "nodo_destino": f"N{new_id[n1] + 1:04d}",
                 "longitud_m": round(_geodetic_length_m(s["utm"]), 2),
                 "nombre_calle": s["nombre"],
+                "utm": s["utm"],  # interno: geometria para el snap de contenedores
             }
         )
     return nodos, tramos
 
 
 # --------------------------------------------------------------------------- #
+# Etapa 2: contenedores (cantidad_contenedores)
+# --------------------------------------------------------------------------- #
+def _load_json(path) -> list:
+    """Carga un JSON de entrada con error claro si falta o es invalido."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError as err:
+        raise SystemExit(f"Falta archivo de entrada: {path}") from err
+    except json.JSONDecodeError as err:
+        raise SystemExit(f"JSON invalido en {path}: {err}") from err
+
+
+def load_containers() -> list[dict]:
+    """Lee 09_levantes/containers.json (foto T0 en WGS84)."""
+    raw = _load_json(CONTAINERS_JSON)
+    return [
+        {
+            "long": float(c["long"]),
+            "lat": float(c["lat"]),
+            "circuitCode": c["circuitCode"],
+            "daysWithoutLift": int(c["daysWithoutLift"]),
+            "position": int(c["position"]),
+        }
+        for c in raw
+    ]
+
+
+def _in_bbox(lon: float, lat: float) -> bool:
+    return (
+        BBOX_WGS["o"] <= lon <= BBOX_WGS["e"] and BBOX_WGS["s"] <= lat <= BBOX_WGS["n"]
+    )
+
+
+def snap_containers(
+    tramos: list[dict], containers: list[dict]
+) -> tuple[list, list, list]:
+    """Asigna cada contenedor al tramo mas cercano.
+
+    Desempate: menor distancia; a igualdad (< 1 mm), menor tramo_id.
+    Radio maximo SNAP_RADIUS_M; mas lejos -> no-asignado (cuarentena).
+    Devuelve (assignments, unassigned, dists):
+      assignments: lista (tramo_id, circuitCode)
+      unassigned:  lista de contenedores fuera de radio
+      dists:       distancias (m) de los asignados (reporte)
+    """
+    assignments = []
+    unassigned = []
+    dists = []
+    for c in containers:
+        x, y = _INV.transform(c["long"], c["lat"])
+        pt = Point(x, y)
+        best_d = float("inf")
+        best_tid = ""
+        for t in tramos:
+            d = round(t["utm"].distance(pt), 3)
+            if (d, t["tramo_id"]) < (best_d, best_tid):
+                best_d = d
+                best_tid = t["tramo_id"]
+        if best_d > SNAP_RADIUS_M:
+            unassigned.append(c)
+        else:
+            assignments.append((best_tid, c["circuitCode"]))
+            dists.append(best_d)
+    return assignments, unassigned, dists
+
+
+def validate_circuits(tramos: list[dict], assignments: list) -> dict:
+    """Por circuitCode: contenedores, tramos y componentes conexas del subgrafo
+    de tramos (contiguidad de la ruta)."""
+    g = nx.Graph()
+    for t in tramos:
+        g.add_edge(t["nodo_origen"], t["nodo_destino"], tramo_id=t["tramo_id"])
+    circuit_tramos = defaultdict(set)
+    circuit_cont = Counter()
+    for tid, code in assignments:
+        circuit_tramos[code].add(tid)
+        circuit_cont[code] += 1
+    report = {}
+    for code in sorted(circuit_tramos):
+        tids = circuit_tramos[code]
+        edges = [(u, v) for u, v, d in g.edges(data=True) if d["tramo_id"] in tids]
+        sub = g.edge_subgraph(edges)
+        report[code] = {
+            "contenedores": circuit_cont[code],
+            "tramos": len(tids),
+            "componentes": nx.number_connected_components(sub) if edges else 0,
+        }
+    return report
+
+
+def crosscheck_smartwaste() -> dict[str, int]:
+    """Cross-check con SmartWaste (fuente independiente): contenedores en el
+    piloto agrupados por circuit_id."""
+    df = pd.read_csv(SMARTWASTE_CSV, dtype={"circuit_id": str})
+    out = Counter()
+    for rec in df.to_dict(orient="records"):
+        lon = rec.get("longitude")
+        lat = rec.get("latitude")
+        if lon is None or lat is None:
+            continue
+        if isinstance(lon, float) and pd.isna(lon):
+            continue
+        if isinstance(lat, float) and pd.isna(lat):
+            continue
+        if _in_bbox(float(lon), float(lat)):
+            out[str(rec["circuit_id"]).strip()] += 1
+    return dict(out)
+
+
+# --------------------------------------------------------------------------- #
 # Salida
 # --------------------------------------------------------------------------- #
+TRAMOS_COLUMNS = [
+    "tramo_id",
+    "nodo_origen",
+    "nodo_destino",
+    "longitud_m",
+    "nombre_calle",
+    "cantidad_contenedores",
+]
+
+
 def write_outputs(nodos: list[dict], tramos: list[dict]) -> None:
     SALIDA_DIR.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(nodos).to_csv(SALIDA_DIR / "nodos.csv", index=False)
-    pd.DataFrame(tramos).to_csv(SALIDA_DIR / "tramos.csv", index=False)
+    pd.DataFrame(tramos)[TRAMOS_COLUMNS].to_csv(SALIDA_DIR / "tramos.csv", index=False)
 
 
 def main() -> None:
@@ -309,9 +447,34 @@ def main() -> None:
 
     sub_segments = node_and_split(fragments)
     nodos, tramos = build_graph(sub_segments)
-
     print(f"nodos (CC mayor): {len(nodos)}")
     print(f"tramos (CC mayor): {len(tramos)}")
+
+    # --- Etapa 2: contenedores ---
+    containers = [c for c in load_containers() if _in_bbox(c["long"], c["lat"])]
+    print(f"contenedores en el piloto: {len(containers)}")
+
+    assignments, unassigned, dists = snap_containers(tramos, containers)
+    counts = Counter(tid for tid, _code in assignments)
+    for t in tramos:
+        t["cantidad_contenedores"] = counts.get(t["tramo_id"], 0)
+
+    n_tramos = sum(1 for v in counts.values() if v > 0)
+    print(f"asignados: {len(assignments)} | no-asignados: {len(unassigned)}")
+    print(f"tramos con >=1 contenedor: {n_tramos}")
+    if dists:
+        print(f"dist snap: min {min(dists):.1f} m, max {max(dists):.1f} m")
+
+    circuits = validate_circuits(tramos, assignments)
+    for code in sorted(circuits):
+        r = circuits[code]
+        print(
+            f"  circuito {code}: {r['contenedores']} cont, {r['tramos']} tramos, {r['componentes']} comp"
+        )
+    sw = crosscheck_smartwaste()
+    print(
+        f"SmartWaste (cross-check): {sum(sw.values())} cont en piloto, {len(sw)} circuitos"
+    )
 
     write_outputs(nodos, tramos)
     print(f"-> {SALIDA_DIR / 'nodos.csv'}")
