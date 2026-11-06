@@ -1,0 +1,62 @@
+{
+    "atributos": [
+        {
+            "descripcion": "Identificador de tramo de vía de circulación",
+            "informacionAdicional": "",
+            "tipoDeDato": "Integer",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "reftramo"
+        },
+        {
+            "descripcion": "Descripcion de prueba",
+            "informacionAdicional": "",
+            "tipoDeDato": "String",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "geom"
+        },
+        {
+            "descripcion": "Identificador único de la vía de circulación ",
+            "informacionAdicional": "",
+            "tipoDeDato": "Numeric",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "idcalle"
+        },
+        {
+            "descripcion": "Nombre de la vía de circulación",
+            "informacionAdicional": "",
+            "tipoDeDato": "String",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "nombre"
+        },
+        {
+            "descripcion": "Registra los tipos de vialidad. Ejemplo: ruta, camino, calle, senda, pasaje",
+            "informacionAdicional": "",
+            "tipoDeDato": "String",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "tipo_vialidad"
+        },
+        {
+            "descripcion": "Registra la fuente del nombre de la vía de circulación",
+            "informacionAdicional": "",
+            "tipoDeDato": "String",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "fuente"
+        },
+        {
+            "descripcion": "Nombre de la localidad censal",
+            "informacionAdicional": "",
+            "tipoDeDato": "String",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "localidad"
+        },
+        {
+            "descripcion": "Nombre del departamento",
+            "informacionAdicional": "",
+            "tipoDeDato": "String",
+            "recursoRelacionado": "",
+            "nombreDeAtributo": "departamento"
+        }
+    ],
+    "titulo": "Metadatos de ejes de vías de circulación",
+    "descripcion": "Metadatos de ejes de vías de circulación"
+}
