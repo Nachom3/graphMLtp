@@ -53,6 +53,10 @@ MIN_SEG_LEN_M = 1.0
 # Foto de referencia T0: dateData del snapshot de levantes (09_levantes).
 T0 = "2026-10-23"
 
+# Semilla fija del dataset (registrada en la salida). Controla tipo_zona, la
+# unica variable simulada por diseno.
+SEED = 42
+
 EJES_CSV = DATASET_DIR / "11_ejes-ide" / "ejes_montevideo.csv"
 CONTAINERS_JSON = DATASET_DIR / "09_levantes" / "containers.json"
 SMARTWASTE_CSV = (
@@ -552,6 +556,20 @@ def snap_quejas(tramos: list[dict], quejas: list[dict]) -> tuple[list, list]:
 
 
 # --------------------------------------------------------------------------- #
+# Etapa 4: tipo_zona (simulada, la unica variable simulada por diseno)
+# --------------------------------------------------------------------------- #
+def assign_tipo_zona(tramos: list[dict], seed: int = SEED) -> None:
+    """Asigna tipo_zona con distribucion 60/25/15 (residencial/comercial/
+    industrial) usando RNG con semilla fija. Orden determinista por tramo_id."""
+    rng = np.random.default_rng(seed)
+    zonas = ["residencial", "comercial", "industrial"]
+    ordered = sorted(tramos, key=lambda t: t["tramo_id"])
+    draw = rng.choice(zonas, size=len(ordered), p=[0.60, 0.25, 0.15]).tolist()
+    for t, z in zip(ordered, draw, strict=True):
+        t["tipo_zona"] = z
+
+
+# --------------------------------------------------------------------------- #
 # Salida
 # --------------------------------------------------------------------------- #
 TRAMOS_COLUMNS = [
@@ -560,6 +578,7 @@ TRAMOS_COLUMNS = [
     "nodo_destino",
     "longitud_m",
     "nombre_calle",
+    "tipo_zona",
     "cantidad_contenedores",
     "dias_desde_ultima_recoleccion",
     "historico_quejas_vecinales",
@@ -635,6 +654,12 @@ def main() -> None:
     )
     q_dist = Counter(q_counts.values())
     print(f"historico_quejas_vecinales dist: {dict(sorted(q_dist.items()))}")
+
+    # --- Etapa 4: tipo_zona (simulada) ---
+    assign_tipo_zona(tramos)
+    zona_dist = Counter(t["tipo_zona"] for t in tramos)
+    pct = ", ".join(f"{k} {v / len(tramos) * 100:.1f}%" for k, v in sorted(zona_dist.items()))
+    print(f"tipo_zona (simulada, seed {SEED}): {dict(sorted(zona_dist.items()))} -> {pct}")
 
     write_outputs(nodos, tramos)
     print(f"-> {SALIDA_DIR / 'nodos.csv'}")
