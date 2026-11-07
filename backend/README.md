@@ -9,7 +9,7 @@ de verdad para el frontend #13): ver `docs/contracts/api-v1.md`.
 pip install -r backend/requirements.txt
 ```
 
-## Tests rápidos (presupuesto 10 s; medido ~1.4 s)
+## Tests rápidos (presupuesto 10 s; medido ~2.2 s)
 
 ```bash
 python -m pytest backend/tests/ -q
@@ -21,24 +21,21 @@ python -m pytest backend/tests/ -q
 python -m pytest --nbval-lax notebooks/12_arquitectura_backend.ipynb -q
 ```
 
-## Demostración reproducible: sklearn → prioridades → recorrido
+## Demostración reproducible: preparación → comparación → predicción
 
-La prueba `backend/tests/test_flujo_integrado.py` sirve como demo end-to-end
-sin levantar servidor ni frontend. Entrena el predictor `arbol` con el fixture
-de tramos, envía sus predicciones a `/recorridos:planificar`, cambia las
-features de `T0001` por las de un ejemplo de prioridad alta, y vuelve a
-predecir y planificar. La prueba verifica que la prioridad de ese tramo cambia
-de baja a alta y que el resultado/costo de la ruta también cambia.
-
-Ejecutar la demo:
+El script `scripts/train_compare.py` usa la preparación #18 tal cual y
+compara `arbol` vs `logistica` con la misma metodología (CV solo en train,
+grilla chica, contraste en validación, test un solo uso). El notebook
+`notebooks/10_entrenamiento_modelos.ipynb` llama al mismo código.
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python -m pytest -q -c backend/pytest.ini backend/tests/test_flujo_integrado.py -p no:cacheprovider
+python scripts/train_compare.py
+python -m pytest --nbval-lax notebooks/10_entrenamiento_modelos.ipynb -q
 ```
 
-Las etiquetas de entrenamiento del fixture de integración se construyen con
-la regla pública anterior `etiqueta_v1`; no son mediciones operativas ni
-evidencia de exactitud o utilidad del modelo en el mundo real.
+Las etiquetas son sintéticas (regla #18 con quejas); las métricas miden
+ajuste a esa regla, no desempeño operativo real. Ver
+`docs/modelo-comparacion.md` para resultados, configuración y límites.
 
 ## Preparación reproducible para ML (#18)
 

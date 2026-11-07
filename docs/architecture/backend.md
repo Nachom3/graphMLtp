@@ -62,21 +62,26 @@ de visualización (`GET /salud`, predecir, planificar) jamás entrena.
 
 ## Evaluación reproducible (objetivo #18 y #10)
 
-**Estado:** #18 está implementado en el adaptador
-`collection.adapters.datasets.ml_preparation`; el `EvaluationProtocol` actual
-sigue declarando `test_size=0.25`, un contrato anterior que no representa el
-reparto de esta preparación.
+**Estado:** #18 y #10 están implementados. #18 vive en
+`collection.adapters.datasets.ml_preparation`; #10 en
+`collection.adapters.models` (`model_specs`, `sklearn_evaluator`,
+`sklearn_predictor`) con protocolo, métricas y comparación en
+`collection.application.models` y delegación en
+`application.use_cases.compare_models`. `EvaluationProtocol.test_size`
+queda como alias legado: el reparto real es el 60/20/20 de #18.
 
 1. **#18:** `prepare_dataset(source, seed=0)` lee el CSV sin modificarlo,
    valida y prepara en memoria quejas sintéticas anónimas por contenedor,
    etiqueta construida, `X`/`y`, particiones 60/20/20 con IDs/distribuciones y
    `ColumnTransformer` sin ajustar. En el CSV actual: 178/59/60 filas.
-2. **#10:** comparar modelos usando validación cruzada estratificada solo
-   dentro del 60 % de entrenamiento. Solicitar 5 folds; si la clase menos
-   frecuente tiene menos ejemplos, reducir los folds a ese mínimo y registrar
-   `cv_folds_pedidos` y `cv_folds_usados`. Si no son viables al menos 2 folds
-   estratificados, informar el problema. Usar `GridSearchCV` para probar una
-   grilla pequeña en esos folds internos, sin usar la validación reservada ni test.
+2. **#10:** `SklearnEvaluator.evaluate` compara con validación cruzada
+   estratificada solo dentro del train (5 pedidos; `cv_folds_usados` según la
+   clase menos frecuente; error si no hay al menos 2 folds) y `GridSearchCV`
+   con grilla pequeña en esos folds, sin tocar validación ni test. En el CSV
+   actual: pedidos 5, usados 5. Elegido por validación: `arbol`
+   (val F1 1.0 vs 0.9268 de `logistica`); test un solo uso en
+   `evaluate_final_on_test` (arbol acc/F1 1.0). Detalle:
+   `docs/modelo-comparacion.md`.
 3. Usar el 20 % de validación para contrastar y elegir el modelo. Evaluar el
    modelo elegido **una sola vez** con el 20 % de test; no volver a ajustar
    decisiones mirando ese resultado.
