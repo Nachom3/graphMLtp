@@ -46,6 +46,11 @@ FastAPI (ver `lineamentos.md`): expone preparación, modelo y grafos por API;
 el frontend consume esa API. Atribución obligatoria: OpenStreetMap (ODbL) +
 Figshare CC BY 4.0.
 
+Issue #12: capas en `docs/architecture/backend.md`, contrato
+API v1 en `docs/contracts/api-v1.md`, código en `backend/src/recoleccion/`,
+notebook en `notebooks/12_arquitectura_backend.ipynb`. Ejecución: ver
+`backend/README.md`.
+
 ## Orden de trabajo
 
 1. #8 Cerrar definición (este plan + `dataset/` + revisión pendiente).
