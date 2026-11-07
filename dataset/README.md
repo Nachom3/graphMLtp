@@ -9,9 +9,11 @@ CSV finales (`nodos.csv`, `tramos.csv`) corresponde al issue #9.
 Dataset **mixto** en una zona piloto de Montevideo:
 
 - Real-derivado: geometría vial (ejes IDE Uruguay) + contenedores por tramo (Figshare/IM).
-- Simulado reproducible: `tipo_zona`, `dias_desde_ultima_recoleccion`,
-  `historico_quejas_vecinales` (con semilla, issue #9).
+- Simulado reproducible: `tipo_zona` (con semilla, issue #9).
 - Etiqueta construida: `prioridad_recoleccion` con regla pública v1 (no oficial).
+
+> `historico_quejas_vecinales` se eliminó del esquema (decisión de equipo): la
+> fuente Por Mi Barrio termina en 2020 y no aporta señal en la foto T0.
 
 Zona piloto v1 (WGS84): oeste `-56.16`, sur `-34.915`, este `-56.15`,
 norte `-34.905`. Recorte chico (~1 km × ~1.1 km) con 196 contenedores y
@@ -45,19 +47,19 @@ Thu, 05 Nov 2026 01:14:17 GMT. Figshare MD5 `20f6ae05b23b0dc4a3be43318e9a4c11`
 `nodos.csv`: `nodo_id`, `lon`, `lat`.
 `tramos.csv`: `tramo_id`, `nodo_origen`, `nodo_destino`, `longitud_m`,
 `nombre_calle`, `tipo_zona`, `cantidad_contenedores`,
-`dias_desde_ultima_recoleccion`, `historico_quejas_vecinales`,
-`prioridad_recoleccion`. Detalle campo por campo en
-`04_esquema-y-regla-etiqueta/README.md`.
+`dias_desde_ultima_recoleccion`, `prioridad_recoleccion`. Detalle campo por
+campo en `04_esquema-y-regla-etiqueta/README.md`.
 
 ## Regla de etiqueta v1 (resumen)
 
 ```text
-score = 2*dias + 3*quejas + 1*contenedores + zona_w  (comercial 2, industrial 1, residencial 0)
-baja si score <= 10 | media si 11-16 | alta si score >= 17
+score = 2*dias + 1*contenedores + zona_w  (comercial 2, industrial 1, residencial 0)
+baja si score <= 0 | media si 1-2 | alta si score >= 3
 ```
 
-Balance estimado ≈37/34/29. Es una etiqueta **construida para enseñar**; el
-modelo aprenderá esta regla y la métrica no prueba utilidad operativa real.
+Balance real ≈43/42/15 (recalibrado en #9 sin quejas). Es una etiqueta
+**construida para enseñar**; el modelo aprenderá esta regla y la métrica no
+prueba utilidad operativa real.
 
 ## Plan del script (issue #9)
 
@@ -68,8 +70,8 @@ Script Python reproducible con semilla fija que:
    con el componente conexo mayor; calcula `longitud_m` geodésica.
 3. Asigna cada contenedor al tramo más cercano (radio y desempates
    documentados) → `cantidad_contenedores`.
-4. Genera `tipo_zona` (≈60/25/15), `dias` (uniforme 0–7) y `quejas`
-   (calibrada con agregados de Windsor) con RNG sembrado.
+4. Genera `tipo_zona` (≈60/25/15) con RNG sembrado y calcula `dias` real
+   desde levantes.
 5. Aplica la regla v1, reporta balance por clase y escribe
    `nodos.csv` + `tramos.csv` con versiones y semilla registradas.
 
