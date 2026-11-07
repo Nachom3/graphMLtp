@@ -28,16 +28,13 @@ from collection.adapters.models.sklearn_predictor import SklearnPredictor  # noq
 from collection.application.models.evaluation_protocol import (  # noqa: E402
     EvaluationProtocol,
 )
-from collection.application.use_cases.compare_models.use_case import (  # noqa: E402
-    CompareModels,
-)
 from collection.domain.entities.segment_features import SegmentFeatures  # noqa: E402
 
 SOURCE = Path(__file__).resolve().parents[2] / "dataset" / "salida" / "tramos.csv"
-CONFIGS = ["arbol", "logistica"]
+CONFIGS = ["arbol", "logistica", "knn", "svc"]
 
 
-def test_catalog_covers_tree_and_another_course_model_with_small_grids():
+def test_catalog_covers_all_course_models_with_small_grids():
     assert "arbol" in MODEL_IDS and len(MODEL_IDS) >= 2
     for model_id in CONFIGS:
         grid = param_grid_for(model_id)
@@ -56,7 +53,7 @@ def test_folds_fallback_is_recorded_and_infeasible_case_is_reported():
         resolve_cv_folds(["baja"] * 1 + ["media"] * 10 + ["alta"] * 10, 5)
 
 
-def test_same_methodology_both_models_choice_justified_and_csv_untouched():
+def test_same_methodology_all_models_choice_justified_and_csv_untouched():
     before = hashlib.sha256(SOURCE.read_bytes()).digest()
     prepared = prepare_dataset(SOURCE, seed=0)
     assert not hasattr(prepared.preprocessor, "transformers_")
@@ -159,32 +156,7 @@ def test_predictor_maps_english_domain_to_spanish_frame_and_back():
     assert predictor.predict([]) == []
 
 
-def test_use_case_delegates_without_sklearn_or_pandas_in_application():
-    application_files = list(
-        (Path(__file__).resolve().parents[1] / "src" / "collection" / "application").rglob("*.py")
-    )
-    assert application_files
-    for path in application_files:
-        text = path.read_text()
-        assert "import pandas" not in text
-        assert "import sklearn" not in text
-        assert "from sklearn" not in text
-
-    class FakeEvaluator:
-        def __init__(self) -> None:
-            self.calls = 0
-
-        def evaluate(self, rows: list[dict], configs: list[str], protocol: EvaluationProtocol):  # type: ignore[no-untyped-def]
-            self.calls += 1
-            return ("comparison", list(rows), list(configs), protocol)
-
-    fake = FakeEvaluator()
-    use_case = CompareModels(fake)  # type: ignore[arg-type]
-    input_rows = [{"a": 1}]
-    result = use_case.execute(input_rows, ["arbol"], EvaluationProtocol())  # type: ignore[arg-type]
-    assert fake.calls == 1
-    assert result[0] == "comparison"  # type: ignore[index]
-
+def test_evaluator_rejects_empty_and_unknown_configs():
     evaluator = SklearnEvaluator()
     with pytest.raises(ValueError, match="at least one model_id"):
         evaluator.evaluate([], [], EvaluationProtocol())

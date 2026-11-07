@@ -92,8 +92,10 @@ modelo lo requiera. Reportar métricas multiclase y una línea base, sin elegir
 el modelo con los resultados de test. Referencias: sesión 5, diapositivas 24,
 30–32 y `clases/sesion-05-evaluacion-de-modelos/notebook-2-validacion-cruzada.ipynb`.
 
-Resultado en el CSV actual (seed 0): elegido `arbol` por validación
-(F1 1.0 vs 0.9268); test un solo uso acc/F1 1.0. Informe completo:
+Resultado en el CSV actual (seed 0, 4 modelos del curso): val F1 1.0
+`arbol` y `svc` (empate), 0.9680 `knn`, 0.9268 `logistica`.
+Elegido `arbol`: desempata con svc por interpretabilidad (plot_tree),
+sin escalado y menor costo; test un solo uso acc/F1 1.0. Informe completo:
 `docs/modelo-comparacion.md`; reproducible con `scripts/train_compare.py` y
 `notebooks/10_entrenamiento_modelos.ipynb`.
 

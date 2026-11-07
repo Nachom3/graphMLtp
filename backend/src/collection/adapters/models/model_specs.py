@@ -1,6 +1,6 @@
 """Model catalog for issue #10 (adapter; sklearn lives here, never in app).
 
-Two course models, same methodology seed and partitions for both:
+Four course models, same methodology seed and partitions for all:
 
 - ``arbol``: ``DecisionTreeClassifier`` (sesion 4, ``notebook-1``) without
   scaling. The tree can represent the synthetic rule directly, so it is
@@ -12,8 +12,12 @@ Two course models, same methodology seed and partitions for both:
   the same ``make_pipeline`` object (sesion 4 ``notebook-2`` cells
   37-38; sesion 5 cells 26-27: everything that learns from data goes
   inside the pipeline so each fold fits only on its own train).
+- ``knn``: ``KNeighborsClassifier`` (sesion 4, curso) with the same scaled
+  preprocessor (distances need scaling). Small grid on ``n_neighbors``.
+- ``svc``: ``SVC`` RBF (sesion 4, curso) with the same scaled preprocessor.
+  Small grid on ``C`` (kernel fijo para mantener la grilla pequena).
 
-Both pipelines are built UNFITTED via ``make_pipeline`` and handed to
+All pipelines are built UNFITTED via ``make_pipeline`` and handed to
 ``cross_validate`` / ``GridSearchCV`` that way; each fold fits its own
 transformations exclusively from its train fold (anti-leakage). The
 categorical branch always uses ``OneHotEncoder(handle_unknown="ignore")``
@@ -27,8 +31,10 @@ from sklearn.base import clone
 from sklearn.compose import ColumnTransformer
 from sklearn.dummy import DummyClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.svm import SVC
 from sklearn.tree import DecisionTreeClassifier
 
 CATEGORICAL_COLUMN = "tipo_zona"
@@ -38,7 +44,7 @@ NUMERIC_COLUMNS = [
     "historico_quejas_vecinales",
 ]
 
-MODEL_IDS = ("arbol", "logistica")
+MODEL_IDS = ("arbol", "logistica", "knn", "svc")
 
 # Small grids (issue #10: "grilla pequena" inside train only).
 PARAM_GRIDS: dict[str, dict[str, list[Any]]] = {
@@ -48,6 +54,12 @@ PARAM_GRIDS: dict[str, dict[str, list[Any]]] = {
     },
     "logistica": {
         "logisticregression__C": [0.5, 1.0, 2.0],
+    },
+    "knn": {
+        "kneighborsclassifier__n_neighbors": [3, 5, 7],
+    },
+    "svc": {
+        "svc__C": [0.5, 1.0],
     },
 }
 
@@ -83,6 +95,16 @@ def build_pipeline(model_id: str, preprocessor: ColumnTransformer, *, seed: int 
         return make_pipeline(
             _scaled_preprocessor(),
             LogisticRegression(max_iter=2000, random_state=seed),
+        )
+    if model_id == "knn":
+        return make_pipeline(
+            _scaled_preprocessor(),
+            KNeighborsClassifier(),
+        )
+    if model_id == "svc":
+        return make_pipeline(
+            _scaled_preprocessor(),
+            SVC(kernel="rbf", random_state=seed),
         )
     raise ValueError(f"unknown model_id: {model_id!r}")
 

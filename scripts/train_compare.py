@@ -1,7 +1,8 @@
 """Reproducible comparison for issue #10 (thin entry point, no logic here).
 
 Uses the #18 preparation as-is (``prepare_dataset(source, seed=0)``),
-compares ``arbol`` vs ``logistica`` with the same methodology, contrasts
+compares los 4 modelos del curso (``arbol``, ``logistica``, ``knn``,
+``svc``) with the same methodology, contrasts
 on reserved validation, and evaluates the winner a single time on test.
 The CSV is only read. All science lives in
 ``collection.adapters.models``; this script only wires and prints.
@@ -23,7 +24,22 @@ from collection.adapters.datasets.ml_preparation import prepare_dataset
 from collection.adapters.models.sklearn_evaluator import SklearnEvaluator
 from collection.application.models.evaluation_protocol import EvaluationProtocol
 
-CONFIGS = ["arbol", "logistica"]
+CONFIGS = ["arbol", "logistica", "knn", "svc"]
+
+CLASS_ORDER = ("baja", "media", "alta")
+
+
+def per_class_ovr(matrix):
+    """Desglose uno-vs-resto: por clase VP/VN/FP/FN desde la matriz."""
+    total = sum(sum(row) for row in matrix)
+    out = {}
+    for i, label in enumerate(CLASS_ORDER):
+        vp = int(matrix[i][i])
+        fn = int(sum(matrix[i]) - vp)
+        fp = int(sum(row[i] for row in matrix) - vp)
+        vn = int(total - vp - fp - fn)
+        out[label] = {"VP": vp, "FP": fp, "FN": fn, "VN": vn}
+    return out
 
 
 def main() -> int:
@@ -46,12 +62,15 @@ def main() -> int:
     for metric in comparison.metrics:
         print(
             f"{metric.model_id}: "
-            f"cv_acc={metric.cv_accuracy_mean:.4f} "
-            f"cv_f1={metric.cv_f1_macro_mean:.4f} "
+            f"cv_acc={metric.cv_accuracy_mean:.4f}±{metric.cv_accuracy_std:.4f} "
+            f"cv_f1={metric.cv_f1_macro_mean:.4f}±{metric.cv_f1_macro_std:.4f} "
             f"val_acc={metric.validation_accuracy:.4f} "
             f"val_f1={metric.validation_f1_macro:.4f} "
             f"best={metric.best_params}"
         )
+        print(f"  matriz_val({metric.model_id})={[list(r) for r in metric.validation_confusion_matrix]}")
+        for label, scores in per_class_ovr(metric.validation_confusion_matrix).items():
+            print(f"    {label}: VP={scores['VP']} FP={scores['FP']} FN={scores['FN']} VN={scores['VN']}")
     print(
         f"baseline(mayoria): acc={comparison.baseline_accuracy:.4f} "
         f"f1={comparison.baseline_f1_macro:.4f}"
