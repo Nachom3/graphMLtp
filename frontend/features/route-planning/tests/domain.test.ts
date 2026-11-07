@@ -13,13 +13,13 @@ describe("conRepeticiones: conserva orden y duplicados (no deduplica)", () => {
     expect(pasos.map((p) => p.orden)).toEqual([0, 1, 2, 3]);
     expect(pasos[0].repetido).toBe(false);
     expect(pasos[1].repetido).toBe(false);
-    expect(pasos[2].repetido).toBe(true); // R-101 segunda vez
-    expect(pasos[2].tramoId).toBe("R-101");
+    expect(pasos[2].repetido).toBe(true); // T0001 segunda vez
+    expect(pasos[2].tramoId).toBe("T0001");
     expect(pasos[3].repetido).toBe(false);
   });
 
   it("recorrido sin repeticiones: todo en false", () => {
-    const pasos = conRepeticiones(["R-101", "R-102", "R-103"] as TramoId[]);
+    const pasos = conRepeticiones(["T0001", "T0002", "T0003"] as TramoId[]);
     expect(pasos.every((p) => !p.repetido)).toBe(true);
   });
 });

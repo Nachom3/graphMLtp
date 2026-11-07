@@ -44,7 +44,7 @@ describe("presentación: estados con datos controlados", () => {
   });
 
   it("resumen muestra pasos, repetidos y costo del backend", () => {
-    const pasos = conRepeticiones(["R-101", "R-102", "R-101"]);
+    const pasos = conRepeticiones(["T0001", "T0002", "T0001"]);
     render(<ResumenRecorrido pasos={pasos} costo={costoFixture} />);
     expect(screen.getByText(/3 pasos/)).toBeDefined();
     expect(screen.getByText(/repetido/)).toBeDefined();

@@ -52,7 +52,7 @@ describe("httpGateway: api-v1, único lugar con fetch", () => {
       expect(body.tramos).toHaveLength(1);
       return jsonRes({
         modelo_id: "arbol",
-        predicciones: [{ tramo_id: "R-101", prioridad: "baja" }],
+        predicciones: [{ tramo_id: "T0001", prioridad: "baja" }],
       });
     });
     const gw = crearHttpGateway("http://test");
@@ -62,7 +62,7 @@ describe("httpGateway: api-v1, único lugar con fetch", () => {
       undefined,
       filasEntrenamientoFixture,
     );
-    expect(res).toEqual([{ tramoId: "R-101", prioridad: "baja" }]);
+    expect(res).toEqual([{ tramoId: "T0001", prioridad: "baja" }]);
   });
 
   it("regla-v1 funciona sin filas (arreglo vacío)", async () => {
@@ -72,27 +72,27 @@ describe("httpGateway: api-v1, único lugar con fetch", () => {
       expect(body.filas_entrenamiento).toEqual([]);
       return jsonRes({
         modelo_id: "regla-v1",
-        predicciones: [{ tramo_id: "R-101", prioridad: "baja" }],
+        predicciones: [{ tramo_id: "T0001", prioridad: "baja" }],
       });
     });
     const gw = crearHttpGateway("http://test");
     const res = await gw.predecirPrioridades("regla-v1", [escenarioFixture.tramos[0]]);
-    expect(res).toEqual([{ tramoId: "R-101", prioridad: "baja" }]);
+    expect(res).toEqual([{ tramoId: "T0001", prioridad: "baja" }]);
   });
 
   it("planificar conserva orden y repeticiones; costo_total_m opaco", async () => {
     mockFetchOnce((url) => {
       expect(url).toContain("/recorridos:planificar");
       return jsonRes({
-        orden: ["R-101", "R-102", "R-101"],
-        repeticiones: ["R-101"],
+        orden: ["T0001", "T0002", "T0001"],
+        repeticiones: ["T0001"],
         costo_total_m: 301.8,
         unidad: "metros",
       });
     });
     const gw = crearHttpGateway("http://test");
     const r = await gw.planificarRecorrido(planInputFixture);
-    expect(r.pasos.map((p) => p.tramoId)).toEqual(["R-101", "R-102", "R-101"]);
+    expect(r.pasos.map((p) => p.tramoId)).toEqual(["T0001", "T0002", "T0001"]);
     expect(r.pasos[2]).toMatchObject({ repetido: true });
     expect(r.costo).toEqual({ valor: 301.8, unidad: "metros" });
   });

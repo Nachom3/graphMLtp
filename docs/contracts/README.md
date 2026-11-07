@@ -22,8 +22,8 @@
    devuelve `422`); `regla-v1` no las necesita y acepta `[]`.
 3. **Orden/frescura:** el frontend guarda cada respuesta con su `requestId`
    y solo aplica la vigente (test de carrera incluido).
-4. **IDs:** `tramo_id` estable (`reftramo` IDE; `T0001`/`R-101` solo aliases
-   de fixture), `nodo_id` `N0001…`, WGS84, `longitud_m` en metros.
+4. **IDs:** `tramo_id` estable (`reftramo` IDE; `T0001`… solo aliases
+   de fixture, iguales a los CSV del backend), `nodo_id` `N0001…`, WGS84, `longitud_m` en metros.
 
 ## Errores
 

@@ -11,7 +11,7 @@ export const escenarioFixture: Escenario = {
   ],
   tramos: [
     {
-      tramoId: "R-101",
+      tramoId: "T0001",
       nodoOrigen: "N0001",
       nodoDestino: "N0002",
       longitudM: 85.5,
@@ -22,7 +22,7 @@ export const escenarioFixture: Escenario = {
       historicoQuejasVecinales: 0,
     },
     {
-      tramoId: "R-102",
+      tramoId: "T0002",
       nodoOrigen: "N0002",
       nodoDestino: "N0003",
       longitudM: 120.0,
@@ -33,7 +33,7 @@ export const escenarioFixture: Escenario = {
       historicoQuejasVecinales: 2,
     },
     {
-      tramoId: "R-103",
+      tramoId: "T0003",
       nodoOrigen: "N0001",
       nodoDestino: "N0003",
       longitudM: 96.3,
@@ -47,9 +47,9 @@ export const escenarioFixture: Escenario = {
 };
 
 export const prioridadesFixture: Record<string, Prioridad> = {
-  "R-101": "baja",
-  "R-102": "alta",
-  "R-103": "media",
+  "T0001": "baja",
+  "T0002": "alta",
+  "T0003": "media",
 };
 
 /**
@@ -102,4 +102,4 @@ export const costoFixture: CostoRecorrido = { valor: 301.8, unidad: "metros" };
  * Recorrido con el mismo tramo dos veces: conserva orden y duplicados.
  * La UI no los deduplica.
  */
-export const recorridoRepetidoIds = ["R-101", "R-102", "R-101", "R-103"];
+export const recorridoRepetidoIds = ["T0001", "T0002", "T0001", "T0003"];

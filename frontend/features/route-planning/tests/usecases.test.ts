@@ -78,8 +78,8 @@ describe("prioridades y recorrido con gateway fake (semántica api-v1)", () => {
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
     expect(res.datos).toEqual([
-      { tramoId: "R-101", prioridad: "baja" },
-      { tramoId: "R-102", prioridad: "alta" },
+      { tramoId: "T0001", prioridad: "baja" },
+      { tramoId: "T0002", prioridad: "alta" },
     ]);
   });
 
@@ -102,7 +102,7 @@ describe("prioridades y recorrido con gateway fake (semántica api-v1)", () => {
   });
 
   it("tramo desconocido → error tipado", async () => {
-    const fantasma = { ...escenarioFixture.tramos[0], tramoId: "R-999" };
+    const fantasma = { ...escenarioFixture.tramos[0], tramoId: "T9999" };
     const res = await solicitarPrioridades(gw(), new RequestStore(), "arbol", [fantasma]);
     expect(res.estado).toBe("error");
     if (res.estado !== "error") return;
@@ -123,8 +123,8 @@ describe("prioridades y recorrido con gateway fake (semántica api-v1)", () => {
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
     expect(res.datos.pasos.map((p) => p.tramoId)).toEqual(recorridoRepetidoIds);
-    expect(res.datos.pasos.filter((p) => p.tramoId === "R-101")).toHaveLength(2);
-    expect(res.datos.pasos[2]).toMatchObject({ tramoId: "R-101", repetido: true });
+    expect(res.datos.pasos.filter((p) => p.tramoId === "T0001")).toHaveLength(2);
+    expect(res.datos.pasos[2]).toMatchObject({ tramoId: "T0001", repetido: true });
     // Costo: se presenta tal cual (costo_total_m), no se deriva de longitudes.
     expect(res.datos.costo).toEqual(costoFixture);
   });

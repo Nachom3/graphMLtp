@@ -13,16 +13,16 @@ describe("mapViewModel: puro, sin Leaflet ni DOM", () => {
 
   it("cuenta repeticiones por tramo y marca el paso actual", () => {
     const vm = toMapViewModel({ tramos: escenarioFixture.tramos, nodos, prioridades, pasos, pasoActual: 2 });
-    const r101 = vm.tramos.find((t) => t.tramoId === "R-101")!;
+    const r101 = vm.tramos.find((t) => t.tramoId === "T0001")!;
     expect(r101.repeticiones).toBe(2);
     expect(r101.esPasoActual).toBe(true);
-    expect(vm.tramos.find((t) => t.tramoId === "R-102")!.repeticiones).toBe(1);
+    expect(vm.tramos.find((t) => t.tramoId === "T0002")!.repeticiones).toBe(1);
   });
 
   it("resumen textual menciona repetidos y no depende del mapa", () => {
     const vm = toMapViewModel({ tramos: escenarioFixture.tramos, nodos, prioridades, pasos });
     expect(vm.resumen).toContain("4 pasos");
-    expect(vm.resumen).toContain("R-101×2");
+    expect(vm.resumen).toContain("T0001×2");
   });
 
   it("sin recorrido: resumen vacío explícito", () => {
