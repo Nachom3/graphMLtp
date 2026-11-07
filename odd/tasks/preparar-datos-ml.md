@@ -21,9 +21,9 @@ Rama: `18-preparar-datos-ml` | Entrega: `feature-branch-chain` | Pruebas: `pytes
 
 - T1 [S1–S9] ruta: inline; estado: completado; commit: n/a — Actualizar los issues #18 y #10 conservando su alcance y separando preparación de entrenamiento.
 - T4 [S10] ruta: inline; estado: completado; commit: n/a — Trasladar el worktree con Git preservando rama y cambios.
-- T2 [S2–S9, S12] ruta: delegado (context backstop) + ajuste inline; estado: completado; commit: `4d083e8` y el commit que incorpora `ml_preparation.py` — Implementar generación simple, preparación y pruebas con documentación de uso.
+- T2 [S2–S9, S12] ruta: delegado (context backstop) + ajuste inline; estado: completado; commit: `4d083e8`, `e2960dd` — Implementar generación simple, preparación y pruebas con documentación de uso.
 - T5 [S11] ruta: inline; estado: completado; commit: n/a — Rebasar la rama sobre `main`, preservando los cambios.
-- T3 [S2–S9, S11–S12] ruta: verificación según riesgo; estado: en curso; commit: pendiente — Verificar el comportamiento público, el CSV original y la suite; cerrar el trabajo.
+- T3 [S2–S9, S11–S12] ruta: verificación según riesgo; estado: completado; commit: `e2960dd` y cierre de seguimiento — Verificar el comportamiento público, el CSV original y la suite; cerrar el trabajo.
 
 ## Log
 
@@ -54,3 +54,5 @@ Rama: `18-preparar-datos-ml` | Entrega: `feature-branch-chain` | Pruebas: `pytes
 - L25: Las dos pruebas del generador se separaron en `backend/tests/test_synthetic_complaints.py`: ambas pasaron; la suite completa pasó con 11 pruebas y el CSV sigue sin cambios.
 - L26: Primer corte `4d083e8`: 136 líneas agregadas; la suite en una copia aislada del índice pasó con 3 pruebas. `assess` para ese commit informó riesgo medio y `reviewDue=false` tras declarar en el índice los archivos nuevos del siguiente corte; no hubo push ni PR.
 - L27: El issue #10 y la documentación ahora exigen `GridSearchCV` con grilla pequeña, en línea con S4. No se inició el entrenamiento de #10.
+- L28: Segundo corte `e2960dd`: 756 líneas cambiadas. La suite de su índice aislado pasó con 11 pruebas; `git diff --check` pasó y el objeto del CSV coincide con `main`. `assess` informó riesgo medio y `reviewDue=false`; no se inició revisión nativa.
+- L29: El segundo corte requiere una excepción de tamaño para su futura revisión si se conserva cohesivo; no se hizo push ni se creó PR. Los issues siguen abiertos.
