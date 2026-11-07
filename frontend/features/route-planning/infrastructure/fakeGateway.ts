@@ -1,26 +1,26 @@
 import type { ApiGateway } from "../application/usecases";
 import type {
-  CostoRecorrido,
-  ErrorOperacion,
-  ModeloId,
-  PasoRecorrido,
+  ModelId,
+  OperationError,
+  Priority,
+  PriorityForSegment,
   PlanInput,
-  Prioridad,
-  PrioridadPorTramo,
-  Tramo,
-  TramoId,
+  RouteCost,
+  RouteStep,
+  Segment,
+  SegmentId,
 } from "../domain/types";
 import { conRepeticiones } from "../domain/types";
 
-export interface FakeOpciones {
-  latenciaMs?: number;
-  falla?: ErrorOperacion | null;
+export interface FakeOptions {
+  latencyMs?: number;
+  failure?: OperationError | null;
   /** Orden forzado para simular el recorrido del backend (con repeticiones). */
-  ordenForzado?: TramoId[];
-  modelosSoportados?: ModeloId[];
+  forcedOrder?: SegmentId[];
+  supportedModels?: ModelId[];
 }
 
-function esperar(ms: number, signal?: AbortSignal): Promise<void> {
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(resolve, ms);
     signal?.addEventListener("abort", () => {
@@ -32,62 +32,60 @@ function esperar(ms: number, signal?: AbortSignal): Promise<void> {
 
 /**
  * Gateway fake en memoria: datos controlados, latencia/fallos configurables.
- * Replica la semántica api-v1 (asociación por tramo_id, orden con
+ * Replica la semántica del backend (asociación por segment_id, orden con
  * repeticiones, costo opaco). Para tests y muestra mínima sin backend.
  */
 export class FakeGateway implements ApiGateway {
   constructor(
-    private prioridades: Record<string, Prioridad>,
-    private costo: CostoRecorrido,
-    private opciones: FakeOpciones = {},
+    private priorities: Record<string, Priority>,
+    private cost: RouteCost,
+    private options: FakeOptions = {},
   ) {}
 
-  private async paso(signal?: AbortSignal): Promise<void> {
-    const ms = this.opciones.latenciaMs ?? 0;
-    if (ms > 0) await esperar(ms, signal);
-    if (this.opciones.falla) throw this.opciones.falla;
+  private async step(signal?: AbortSignal): Promise<void> {
+    const ms = this.options.latencyMs ?? 0;
+    if (ms > 0) await wait(ms, signal);
+    if (this.options.failure) throw this.options.failure;
     signal?.throwIfAborted();
   }
 
-  async salud(): Promise<{ estado: string; version: string; esquema: string }> {
-    await this.paso();
-    return { estado: "ok", version: "v1", esquema: "v1" };
+  async health(): Promise<{ status: string; version: string; schema: string }> {
+    await this.step();
+    return { status: "ok", version: "v1", schema: "v1" };
   }
 
-  async predecirPrioridades(
-    modeloId: ModeloId,
-    tramos: Tramo[],
+  async predictPriorities(
+    modelId: ModelId,
+    segments: Segment[],
     signal?: AbortSignal,
-  ): Promise<PrioridadPorTramo[]> {
-    // El fake no necesita filas de entrenamiento: responde con prioridades
-    // controladas. La forma real del cuerpo se verifica en httpGateway.test.
-    await this.paso(signal);
-    const soportados = this.opciones.modelosSoportados ?? ["arbol", "logistica", "regla-v1"];
-    if (!soportados.includes(modeloId)) {
-      throw { codigo: "backend", detalle: `modelo no soportado en fake: ${modeloId}` } satisfies ErrorOperacion;
+  ): Promise<PriorityForSegment[]> {
+    await this.step(signal);
+    const supported = this.options.supportedModels ?? ["arbol", "logistica", "rule-v1"];
+    if (!supported.includes(modelId)) {
+      throw { code: "backend", detail: `modelo no soportado en fake: ${modelId}` } satisfies OperationError;
     }
-    return tramos.map((t) => {
-      const prioridad = this.prioridades[t.tramoId];
-      if (!prioridad) {
-        throw { codigo: "tramo-desconocido", detalle: t.tramoId } satisfies ErrorOperacion;
+    return segments.map((s) => {
+      const priority = this.priorities[s.segmentId];
+      if (!priority) {
+        throw { code: "prediction-without-segment", detail: s.segmentId } satisfies OperationError;
       }
-      return { tramoId: t.tramoId, prioridad };
+      return { segmentId: s.segmentId, priority };
     });
   }
 
-  async planificarRecorrido(
+  async planRoute(
     input: PlanInput,
     signal?: AbortSignal,
-  ): Promise<{ pasos: PasoRecorrido[]; costo: CostoRecorrido }> {
-    await this.paso(signal);
-    const orden =
-      this.opciones.ordenForzado ??
-      input.tramos.filter((t) => input.incluir.includes(input.prioridades[t.tramoId])).map((t) => t.tramoId);
-    for (const id of orden) {
-      if (!(id in this.prioridades)) {
-        throw { codigo: "tramo-desconocido", detalle: id } satisfies ErrorOperacion;
+  ): Promise<{ steps: RouteStep[]; cost: RouteCost }> {
+    await this.step(signal);
+    const order =
+      this.options.forcedOrder ??
+      input.segments.filter((s) => input.include.includes(input.priorities[s.segmentId])).map((s) => s.segmentId);
+    for (const id of order) {
+      if (!(id in this.priorities)) {
+        throw { code: "prediction-without-segment", detail: id } satisfies OperationError;
       }
     }
-    return { pasos: conRepeticiones(orden), costo: this.costo };
+    return { steps: conRepeticiones(order), cost: this.cost };
   }
 }

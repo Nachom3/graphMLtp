@@ -1,66 +1,65 @@
 import type { ApiGateway } from "../application/usecases";
 import type {
-  ComparacionModelos,
-  CostoRecorrido,
-  ErrorCodigo,
-  ErrorOperacion,
-  FilaEntrenamiento,
-  ModeloId,
-  PasoRecorrido,
+  ErrorCode,
+  ModelComparison,
+  ModelId,
+  Node,
+  OperationError,
+  PriorityForSegment,
   PlanInput,
-  PrioridadPorTramo,
-  Tramo,
+  RouteCost,
+  RouteStep,
+  Segment,
+  TrainingRow,
 } from "../domain/types";
 
-/** Formas de api-v1 (docs/contracts/api-v1.md, manda el #12). */
-interface PredecirDTO {
-  modelo_id: string;
-  predicciones: { tramo_id: string; prioridad: "baja" | "media" | "alta" }[];
+/** Formas del backend (nombres del dominio Python; rutas provisorias). */
+interface PredictDTO {
+  model_id: string;
+  predictions: { segment_id: string; priority: "low" | "medium" | "high" }[];
 }
 
-interface PlanificarDTO {
-  orden: string[];
-  repeticiones: string[];
-  costo_total_m: number;
-  unidad: string;
+interface PlanDTO {
+  order: string[];
+  repetitions: string[];
+  total_cost_m: number;
+  unit: string;
 }
 
-/** Mapea códigos api-v1 (MAYÚSCULAS) a códigos de presentación estables. */
-function mapearCodigo(codigo: unknown): ErrorCodigo {
-  switch (codigo) {
-    case "RECORRIDO_IMPOSIBLE":
-      return "recorrido-imposible";
-    case "PREDICCION_SIN_TRAMO":
-      return "tramo-desconocido";
-    case "DATASET_INVALIDO":
-    case "EVALUACION_INVALIDA":
-    case "MODELO_DESCONOCIDO":
-      return "backend";
+/** Mapea códigos del backend a códigos estables de presentación. */
+function mapCode(code: unknown): ErrorCode {
+  switch (code) {
+    case "IMPOSSIBLE_ROUTE":
+      return "impossible-route";
+    case "PREDICTION_WITHOUT_SEGMENT":
+      return "prediction-without-segment";
+    case "INVALID_DATASET":
+      return "invalid-dataset";
     default:
       return "backend";
   }
 }
 
-/** api-v1 envuelve errores en {"detail": {"codigo", "detalle"}}. */
-function aErrorOperacion(status: number, body: unknown): ErrorOperacion {
+/** El backend envuelve errores en {"detail": {"code", "detail"}}. */
+function toOperationError(status: number, body: unknown): OperationError {
   const detail =
     typeof body === "object" && body !== null && "detail" in body
       ? (body as { detail: unknown }).detail
       : null;
-  const codigo =
-    typeof detail === "object" && detail !== null && "codigo" in detail
-      ? (detail as { codigo: unknown }).codigo
+  const code =
+    typeof detail === "object" && detail !== null && "code" in detail
+      ? (detail as { code: unknown }).code
       : null;
-  const detalle =
-    typeof detail === "object" && detail !== null && "detalle" in detail
-      ? String((detail as { detalle: unknown }).detalle)
+  const message =
+    typeof detail === "object" && detail !== null && "detail" in detail
+      ? String((detail as { detail: unknown }).detail)
       : JSON.stringify(body);
-  if (typeof codigo === "string") return { codigo: mapearCodigo(codigo), detalle };
-  if (status === 404) return { codigo: "tramo-desconocido", detalle };
-  return { codigo: "backend", detalle: `http ${status}` };
+  if (typeof code === "string") return { code: mapCode(code), detail: message };
+  if (status === 404) return { code: "prediction-without-segment", detail: message };
+  return { code: "backend", detail: `http ${status}` };
 }
 
-async function leer<T>(res: Response): Promise<T> {
+async function read<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let body: unknown = null;
     try {
@@ -68,36 +67,39 @@ async function leer<T>(res: Response): Promise<T> {
     } catch {
       body = null;
     }
-    throw aErrorOperacion(res.status, body);
+    throw toOperationError(res.status, body);
   }
   return (await res.json()) as T;
 }
 
-function filaEntrenamiento(f: FilaEntrenamiento) {
+function segmentRow(s: Segment) {
   return {
-    tipo_zona: f.tipoZona,
-    cantidad_contenedores: f.cantidadContenedores,
-    dias_desde_ultima_recoleccion: f.diasDesdeUltimaRecoleccion,
-    historico_quejas_vecinales: f.historicoQuejasVecinales,
-    prioridad_recoleccion: f.prioridadRecoleccion,
+    segment_id: s.segmentId,
+    origin_node: s.originNode,
+    destination_node: s.destinationNode,
+    length_m: s.lengthM,
+    zone_type: s.zoneType,
+    container_count: s.containerCount,
+    days_since_last_collection: s.daysSinceLastCollection,
+    historic_neighbor_complaints: s.historicNeighborComplaints,
   };
 }
 
-function filaTramo(t: Tramo) {
+function trainingRow(r: TrainingRow) {
   return {
-    tramo_id: t.tramoId,
-    nodo_origen: t.nodoOrigen,
-    nodo_destino: t.nodoDestino,
-    longitud_m: t.longitudM,
-    nombre_calle: t.nombreCalle,
-    tipo_zona: t.tipoZona,
-    cantidad_contenedores: t.cantidadContenedores,
-    dias_desde_ultima_recoleccion: t.diasDesdeUltimaRecoleccion,
-    historico_quejas_vecinales: t.historicoQuejasVecinales,
+    zone_type: r.zoneType,
+    container_count: r.containerCount,
+    days_since_last_collection: r.daysSinceLastCollection,
+    historic_neighbor_complaints: r.historicNeighborComplaints,
+    priority: r.priority,
   };
 }
 
-/** Adaptador HTTP: único lugar con fetch. Transforma DTOs y errores api-v1. */
+function nodeRow(n: Node) {
+  return { node_id: n.nodeId, lon: n.lon, lat: n.lat };
+}
+
+/** Adaptador HTTP: único lugar con fetch. Transforma DTOs y errores del backend. */
 export function crearHttpGateway(baseUrl: string): ApiGateway {
   async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
     let res: Response;
@@ -105,9 +107,9 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
       res = await fetch(`${baseUrl}${path}`, { signal });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") throw e;
-      throw { codigo: "red" } satisfies ErrorOperacion;
+      throw { code: "network" } satisfies OperationError;
     }
-    return leer<T>(res);
+    return read<T>(res);
   }
   async function post<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     let res: Response;
@@ -120,61 +122,61 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
       });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") throw e;
-      throw { codigo: "red" } satisfies ErrorOperacion;
+      throw { code: "network" } satisfies OperationError;
     }
-    return leer<T>(res);
+    return read<T>(res);
   }
   return {
-    salud(signal?: AbortSignal) {
-      return get<{ estado: string; version: string; esquema: string }>("/salud", signal);
+    health(signal?: AbortSignal) {
+      return get<{ status: string; version: string; schema: string }>("/health", signal);
     },
-    async predecirPrioridades(
-      modeloId: ModeloId,
-      tramos: Tramo[],
+    async predictPriorities(
+      modelId: ModelId,
+      segments: Segment[],
       signal?: AbortSignal,
-      filas: FilaEntrenamiento[] = [],
-    ): Promise<PrioridadPorTramo[]> {
-      const dto = await post<PredecirDTO>(
-        "/predicciones:predecir",
+      trainingRows: TrainingRow[] = [],
+    ): Promise<PriorityForSegment[]> {
+      const dto = await post<PredictDTO>(
+        "/predictions:predict",
         {
-          modelo_id: modeloId,
-          // api-v1 la exige para `arbol`/`logistica` (422 sin ella);
-          // `regla-v1` la ignora y acepta `[]`.
-          filas_entrenamiento: filas.map(filaEntrenamiento),
-          tramos: tramos.map(filaTramo),
+          model_id: modelId,
+          // El backend la exige para `arbol`/`logistica` (422 sin ella);
+          // `rule-v1` la ignora y acepta `[]`.
+          training_rows: trainingRows.map(trainingRow),
+          segments: segments.map(segmentRow),
         },
         signal,
       );
-      // Asociación inequívoca por tramo_id, tal cual la devuelve el backend.
-      return dto.predicciones.map((p) => ({ tramoId: p.tramo_id, prioridad: p.prioridad }));
+      // Asociación inequívoca por segment_id, tal cual la devuelve el backend.
+      return dto.predictions.map((p) => ({ segmentId: p.segment_id, priority: p.priority }));
     },
-    async planificarRecorrido(
+    async planRoute(
       input: PlanInput,
       signal?: AbortSignal,
-    ): Promise<{ pasos: PasoRecorrido[]; costo: CostoRecorrido }> {
-      const dto = await post<PlanificarDTO>(
-        "/recorridos:planificar",
+    ): Promise<{ steps: RouteStep[]; cost: RouteCost }> {
+      const dto = await post<PlanDTO>(
+        "/routes:plan",
         {
-          nodos: input.nodos.map((n) => ({ nodo_id: n.nodoId, lon: n.lon, lat: n.lat })),
-          tramos: input.tramos.map(filaTramo),
-          prioridades: input.prioridades,
-          incluir: input.incluir,
+          nodes: input.nodes.map(nodeRow),
+          segments: input.segments.map(segmentRow),
+          priorities: input.priorities,
+          include: input.include,
         },
         signal,
       );
       // Se conserva orden y repeticiones tal cual; el costo es opaco.
-      const repetidos = new Set(dto.repeticiones);
+      const repeated = new Set(dto.repetitions);
       return {
-        pasos: dto.orden.map((tramoId, orden) => ({
-          orden,
-          tramoId,
-          repetido: repetidos.has(tramoId),
+        steps: dto.order.map((segmentId, order) => ({
+          order,
+          segmentId,
+          repeated: repeated.has(segmentId),
         })),
-        costo: { valor: dto.costo_total_m, unidad: dto.unidad },
+        cost: { totalCostM: dto.total_cost_m, unit: dto.unit },
       };
     },
   };
 }
 
 /** Re-export para documentar la comparación versionada (no pasa por HTTP). */
-export type { ComparacionModelos };
+export type { ModelComparison };

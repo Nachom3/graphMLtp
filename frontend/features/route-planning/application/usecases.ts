@@ -1,34 +1,34 @@
 import type {
-  ComparacionModelos,
-  CostoRecorrido,
-  ErrorOperacion,
-  Escenario,
-  EstadoOperacion,
-  FilaEntrenamiento,
-  ModeloId,
-  PasoRecorrido,
+  ModelComparison,
+  ModelId,
+  OperationError,
+  OperationState,
   PlanInput,
-  PrioridadPorTramo,
-  Tramo,
+  PriorityForSegment,
+  RouteCost,
+  RouteStep,
+  Scenario,
+  Segment,
+  TrainingRow,
 } from "../domain/types";
 import { conRepeticiones } from "../domain/types";
 
 /**
- * Puerto pequeño sustituible (DIP/ISP), alineado con api-v1 del #12.
+ * Puerto pequeño sustituible (DIP/ISP), alineado con el backend.
  * La app depende de esto; HTTP y fake lo implementan. Sin fetch disperso.
  */
 export interface ApiGateway {
-  salud(signal?: AbortSignal): Promise<{ estado: string; version: string; esquema: string }>;
-  predecirPrioridades(
-    modeloId: ModeloId,
-    tramos: Tramo[],
+  health(signal?: AbortSignal): Promise<{ status: string; version: string; schema: string }>;
+  predictPriorities(
+    modelId: ModelId,
+    segments: Segment[],
     signal?: AbortSignal,
-    filas?: FilaEntrenamiento[],
-  ): Promise<PrioridadPorTramo[]>;
-  planificarRecorrido(
+    trainingRows?: TrainingRow[],
+  ): Promise<PriorityForSegment[]>;
+  planRoute(
     input: PlanInput,
     signal?: AbortSignal,
-  ): Promise<{ pasos: PasoRecorrido[]; costo: CostoRecorrido }>;
+  ): Promise<{ steps: RouteStep[]; cost: RouteCost }>;
 }
 
 /** Fuente de verdad mínima de la solicitud vigente (sin store global). */
@@ -48,7 +48,7 @@ export async function ejecutar<T>(
   store: RequestStore,
   promesa: Promise<T>,
   aVacio: (datos: T) => string | null,
-): Promise<EstadoOperacion<T>> {
+): Promise<OperationState<T>> {
   const requestId = store.siguiente();
   try {
     const datos = await promesa;
@@ -65,15 +65,15 @@ export async function ejecutar<T>(
   }
 }
 
-function aError(e: unknown): ErrorOperacion {
+function aError(e: unknown): OperationError {
   if (e instanceof DOMException && e.name === "AbortError") {
-    return { codigo: "red", detalle: "solicitud cancelada" };
+    return { code: "network", detail: "solicitud cancelada" };
   }
-  if (typeof e === "object" && e !== null && "codigo" in e) {
-    return e as ErrorOperacion;
+  if (typeof e === "object" && e !== null && "code" in e) {
+    return e as OperationError;
   }
-  if (e instanceof Error) return { codigo: "backend", detalle: e.message };
-  return { codigo: "backend" };
+  if (e instanceof Error) return { code: "backend", detail: e.message };
+  return { code: "backend" };
 }
 
 /* Casos de uso (coordinan; no conocen React/HTTP/Leaflet) */
@@ -82,8 +82,8 @@ export function verificarSalud(
   gw: ApiGateway,
   store: RequestStore,
   signal?: AbortSignal,
-): Promise<EstadoOperacion<{ estado: string; version: string; esquema: string }>> {
-  return ejecutar(store, gw.salud(signal), (s) =>
+): Promise<OperationState<{ status: string; version: string; schema: string }>> {
+  return ejecutar(store, gw.health(signal), (s) =>
     s.version !== "v1" ? `versión incompatible: ${s.version}` : null,
   );
 }
@@ -95,24 +95,24 @@ export function verificarSalud(
  */
 export function cargarEscenario(
   store: RequestStore,
-  datos: Escenario,
-): EstadoOperacion<Escenario> {
+  datos: Scenario,
+): OperationState<Scenario> {
   const requestId = store.siguiente();
   if (datos.version !== "v1") {
     return {
       estado: "error",
       requestId,
-      error: { codigo: "version-incompatible", detalle: datos.version },
+      error: { code: "version-mismatch", detail: datos.version },
     };
   }
-  if (datos.tramos.length === 0) return { estado: "vacio", motivo: "escenario sin tramos" };
-  const nodos = new Set(datos.nodos.map((n) => n.nodoId));
-  const roto = datos.tramos.find((t) => !nodos.has(t.nodoOrigen) || !nodos.has(t.nodoDestino));
+  if (datos.segments.length === 0) return { estado: "vacio", motivo: "escenario sin tramos" };
+  const nodos = new Set(datos.nodes.map((n) => n.nodeId));
+  const roto = datos.segments.find((t) => !nodos.has(t.originNode) || !nodos.has(t.destinationNode));
   if (roto) {
     return {
       estado: "error",
       requestId,
-      error: { codigo: "backend", detalle: `tramo ${roto.tramoId} referencia nodos inexistentes` },
+      error: { code: "backend", detail: `segmento ${roto.segmentId} referencia nodos inexistentes` },
     };
   }
   return { estado: "exito", requestId, datos };
@@ -120,13 +120,13 @@ export function cargarEscenario(
 
 /**
  * Consultar comparación: presenta resultados YA calculados (offline).
- * api-v1 advierte no llamar a /modelos/comparar desde visualización:
+ * El backend pide no llamar a comparar desde visualización:
  * por eso no pasa por HTTP; los datos versionados los provee el llamador.
  */
 export function consultarComparacion(
   store: RequestStore,
-  datos: ComparacionModelos,
-): EstadoOperacion<ComparacionModelos> {
+  datos: ModelComparison,
+): OperationState<ModelComparison> {
   const requestId = store.siguiente();
   return { estado: "exito", requestId, datos };
 }
@@ -134,18 +134,18 @@ export function consultarComparacion(
 export function solicitarPrioridades(
   gw: ApiGateway,
   store: RequestStore,
-  modeloId: ModeloId,
-  tramos: Tramo[],
+  modelId: ModelId,
+  segments: Segment[],
   signal?: AbortSignal,
-  filas: FilaEntrenamiento[] = [],
-): Promise<EstadoOperacion<PrioridadPorTramo[]>> {
-  if (tramos.length === 0) {
+  trainingRows: TrainingRow[] = [],
+): Promise<OperationState<PriorityForSegment[]>> {
+  if (segments.length === 0) {
     return Promise.resolve({
       estado: "vacio",
       motivo: "selección vacía",
-    } as EstadoOperacion<PrioridadPorTramo[]>);
+    } as OperationState<PriorityForSegment[]>);
   }
-  return ejecutar(store, gw.predecirPrioridades(modeloId, tramos, signal, filas), (ps) =>
+  return ejecutar(store, gw.predictPriorities(modelId, segments, signal, trainingRows), (ps) =>
     ps.length === 0 ? "sin prioridades" : null,
   );
 }
@@ -155,22 +155,22 @@ export function solicitarRecorrido(
   store: RequestStore,
   input: PlanInput,
   signal?: AbortSignal,
-): Promise<EstadoOperacion<{ pasos: PasoRecorrido[]; costo: CostoRecorrido }>> {
-  if (input.tramos.length === 0) {
+): Promise<OperationState<{ steps: RouteStep[]; cost: RouteCost }>> {
+  if (input.segments.length === 0) {
     return Promise.resolve({
       estado: "vacio",
       motivo: "selección vacía",
-    } as EstadoOperacion<{ pasos: PasoRecorrido[]; costo: CostoRecorrido }>);
+    } as OperationState<{ steps: RouteStep[]; cost: RouteCost }>);
   }
-  return ejecutar(store, gw.planificarRecorrido(input, signal), (r) =>
-    r.pasos.length === 0 ? "recorrido vacío" : null,
+  return ejecutar(store, gw.planRoute(input, signal), (r) =>
+    r.steps.length === 0 ? "recorrido vacío" : null,
   );
 }
 
 /** Re-marca repeticiones del lado presentación (no toca el contrato). */
-export function marcarRepeticiones(pasos: PasoRecorrido[]): PasoRecorrido[] {
-  return conRepeticiones(pasos.map((p) => p.tramoId)).map((m, i) => ({
+export function marcarRepeticiones(steps: RouteStep[]): RouteStep[] {
+  return conRepeticiones(steps.map((p) => p.segmentId)).map((m, i) => ({
     ...m,
-    orden: pasos[i]?.orden ?? i,
+    order: steps[i]?.order ?? i,
   }));
 }

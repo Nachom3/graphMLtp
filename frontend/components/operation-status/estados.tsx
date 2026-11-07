@@ -5,7 +5,7 @@ type EstadoVisible =
   | { estado: "carga"; requestId?: number }
   | { estado: "vacio"; motivo: string }
   | { estado: "exito"; requestId?: number }
-  | { estado: "error"; requestId?: number; error: { codigo: string; detalle?: string } };
+  | { estado: "error"; requestId?: number; error: { code: string; detail?: string } };
 
 /** Texto accesible por estado sin depender de tipos de ninguna feature. */
 export function textoEstado(estado: EstadoVisible): string {
@@ -19,7 +19,7 @@ export function textoEstado(estado: EstadoVisible): string {
     case "exito":
       return "Listo.";
     case "error":
-      return `Error (${estado.error.codigo}): ${estado.error.detalle ?? "reintentá la solicitud"}.`;
+      return `Error (${estado.error.code}): ${estado.error.detail ?? "reintentá la solicitud"}.`;
   }
 }
 

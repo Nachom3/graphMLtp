@@ -1,7 +1,7 @@
-import { LEYENDA_PRIORIDAD, type Prioridad } from "../../domain/types";
+import { LEYENDA_PRIORIDAD, type Priority } from "../../domain/types";
 
 export function LeyendaPrioridades() {
-  const items = (Object.keys(LEYENDA_PRIORIDAD) as Prioridad[]).map((prioridad) => (
+  const items = (Object.keys(LEYENDA_PRIORIDAD) as Priority[]).map((prioridad) => (
     <li key={prioridad}>
       {LEYENDA_PRIORIDAD[prioridad].etiqueta} — {LEYENDA_PRIORIDAD[prioridad].patron}
     </li>

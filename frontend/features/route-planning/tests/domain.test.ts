@@ -2,31 +2,31 @@ import { describe, expect, it } from "vitest";
 import {
   LEYENDA_PRIORIDAD,
   conRepeticiones,
-  type TramoId,
+  type SegmentId,
 } from "../domain/types";
-import { recorridoRepetidoIds } from "./fixtures";
+import { repeatedRouteIds } from "./fixtures";
 
 describe("conRepeticiones: conserva orden y duplicados (no deduplica)", () => {
   it("marca el segundo paso por el mismo tramo como repetido", () => {
-    const pasos = conRepeticiones(recorridoRepetidoIds as TramoId[]);
-    expect(pasos.map((p) => p.tramoId)).toEqual(recorridoRepetidoIds);
-    expect(pasos.map((p) => p.orden)).toEqual([0, 1, 2, 3]);
-    expect(pasos[0].repetido).toBe(false);
-    expect(pasos[1].repetido).toBe(false);
-    expect(pasos[2].repetido).toBe(true); // T0001 segunda vez
-    expect(pasos[2].tramoId).toBe("T0001");
-    expect(pasos[3].repetido).toBe(false);
+    const pasos = conRepeticiones(repeatedRouteIds as SegmentId[]);
+    expect(pasos.map((p) => p.segmentId)).toEqual(repeatedRouteIds);
+    expect(pasos.map((p) => p.order)).toEqual([0, 1, 2, 3]);
+    expect(pasos[0].repeated).toBe(false);
+    expect(pasos[1].repeated).toBe(false);
+    expect(pasos[2].repeated).toBe(true); // T0001 segunda vez
+    expect(pasos[2].segmentId).toBe("T0001");
+    expect(pasos[3].repeated).toBe(false);
   });
 
   it("recorrido sin repeticiones: todo en false", () => {
-    const pasos = conRepeticiones(["T0001", "T0002", "T0003"] as TramoId[]);
-    expect(pasos.every((p) => !p.repetido)).toBe(true);
+    const pasos = conRepeticiones(["T0001", "T0002", "T0003"] as SegmentId[]);
+    expect(pasos.every((p) => !p.repeated)).toBe(true);
   });
 });
 
 describe("leyenda: no depende exclusivamente del color", () => {
   it("cada prioridad tiene etiqueta y patrón textual", () => {
-    for (const p of ["baja", "media", "alta"] as const) {
+    for (const p of ["low", "medium", "high"] as const) {
       expect(LEYENDA_PRIORIDAD[p].etiqueta.length).toBeGreaterThan(0);
       expect(LEYENDA_PRIORIDAD[p].patron.length).toBeGreaterThan(0);
     }

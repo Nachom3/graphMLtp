@@ -10,27 +10,28 @@ export {
 } from "./application/usecases";
 export type { ApiGateway } from "./application/usecases";
 export { FakeGateway } from "./infrastructure/fakeGateway";
-export type { FakeOpciones } from "./infrastructure/fakeGateway";
+export type { FakeOptions } from "./infrastructure/fakeGateway";
 export { crearHttpGateway } from "./infrastructure/httpGateway";
 export { conRepeticiones, LEYENDA_PRIORIDAD } from "./domain/types";
 export type {
-  ComparacionModelos,
-  CostoRecorrido,
-  ErrorCodigo,
-  ErrorOperacion,
-  EstadoOperacion,
-  Escenario,
-  FilaEntrenamiento,
-  ModeloId,
-  Nodo,
-  NodoId,
-  PasoRecorrido,
+  ErrorCode,
+  ModelComparison,
+  ModelId,
+  ModelMetrics,
+  Node,
+  NodeId,
+  OperationError,
+  OperationState,
   PlanInput,
-  Prioridad,
-  PrioridadPorTramo,
-  TipoZona,
-  Tramo,
-  TramoId,
+  Priority,
+  PriorityForSegment,
+  RouteCost,
+  RouteStep,
+  Scenario,
+  Segment,
+  SegmentId,
+  TrainingRow,
+  ZoneType,
 } from "./domain/types";
 export { MapView, toMapViewModel } from "./components/map-view";
 export type { MapViewModel, TramoVisible } from "./components/map-view";

@@ -35,7 +35,7 @@ Los componentes compartidos no importan de `features/`. Cada componente React re
 ## Contratos y comportamiento preservado
 
 - `ApiGateway` es un puerto pequeño; `crearHttpGateway` contiene las llamadas HTTP y el mapeo de errores api-v1. `FakeGateway` permite pruebas controladas.
-- Los pasos conservan el orden y las apariciones repetidas devueltas por el backend. Las prioridades mantienen su asociación por `tramo_id`.
+- Los pasos conservan el orden y las apariciones repetidas devueltas por el backend. Las prioridades mantienen su asociación por `segment_id`.
 - El costo del recorrido es opaco y se presenta tal como lo informa el backend; el frontend no lo recalcula.
 - El view-model del mapa es puro. Leaflet se carga solo en cliente y recibe el modelo de vista, no entidades del backend.
 - Los componentes compartidos y específicos tienen entradas locales `index.ts`; la feature publica su API desde `features/route-planning/index.ts`. `EstadoVista` compone la primitiva shadcn `Alert` sin cambiar sus mensajes en español ni el rol accesible `status`. La utilidad estándar `cn` está en `lib/utils.ts` y combina `clsx` con `tailwind-merge`.

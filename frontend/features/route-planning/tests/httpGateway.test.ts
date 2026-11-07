@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { crearHttpGateway } from "../infrastructure/httpGateway";
-import { escenarioFixture, filasEntrenamientoFixture, planInputFixture } from "./fixtures";
+import { planInputFixture, scenarioFixture, trainingRowsFixture } from "./fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -18,94 +18,97 @@ function jsonRes(body: unknown, status = 200): Response {
   });
 }
 
-describe("httpGateway: api-v1, único lugar con fetch", () => {
-  it("salud devuelve versión y esquema", async () => {
+describe("httpGateway: backend en inglés, único lugar con fetch", () => {
+  it("health devuelve status, versión y esquema", async () => {
     mockFetchOnce((url) => {
-      expect(url).toContain("/salud");
-      return jsonRes({ estado: "ok", version: "v1", esquema: "v1" });
+      expect(url).toContain("/health");
+      return jsonRes({ status: "ok", version: "v1", schema: "v1" });
     });
     const gw = crearHttpGateway("http://test");
-    await expect(gw.salud()).resolves.toEqual({ estado: "ok", version: "v1", esquema: "v1" });
+    await expect(gw.health()).resolves.toEqual({ status: "ok", version: "v1", schema: "v1" });
   });
 
-  it("predecir envía filas_entrenamiento (api-v1 la exige para arbol/logistica)", async () => {
+  it("predecir envía training_rows (el backend las exige para arbol/logistica)", async () => {
     mockFetchOnce((url, init) => {
-      expect(url).toContain("/predicciones:predecir");
+      expect(url).toContain("/predictions:predict");
       const body = JSON.parse(String(init?.body));
-      expect(body.modelo_id).toBe("arbol");
-      expect(body.filas_entrenamiento).toEqual([
+      expect(body.model_id).toBe("arbol");
+      expect(body.training_rows).toEqual([
         {
-          tipo_zona: "residencial",
-          cantidad_contenedores: 1,
-          dias_desde_ultima_recoleccion: 2,
-          historico_quejas_vecinales: 0,
-          prioridad_recoleccion: "baja",
+          zone_type: "residential",
+          container_count: 1,
+          days_since_last_collection: 2,
+          historic_neighbor_complaints: 0,
+          priority: "low",
         },
         {
-          tipo_zona: "comercial",
-          cantidad_contenedores: 2,
-          dias_desde_ultima_recoleccion: 4,
-          historico_quejas_vecinales: 2,
-          prioridad_recoleccion: "alta",
+          zone_type: "commercial",
+          container_count: 2,
+          days_since_last_collection: 4,
+          historic_neighbor_complaints: 2,
+          priority: "high",
         },
       ]);
-      expect(body.tramos).toHaveLength(1);
+      expect(body.segments).toHaveLength(1);
+      expect(body.segments[0]).toMatchObject({ segment_id: "T0001", zone_type: "residential" });
       return jsonRes({
-        modelo_id: "arbol",
-        predicciones: [{ tramo_id: "T0001", prioridad: "baja" }],
+        model_id: "arbol",
+        predictions: [{ segment_id: "T0001", priority: "low" }],
       });
     });
     const gw = crearHttpGateway("http://test");
-    const res = await gw.predecirPrioridades(
+    const res = await gw.predictPriorities(
       "arbol",
-      [escenarioFixture.tramos[0]],
+      [scenarioFixture.segments[0]],
       undefined,
-      filasEntrenamientoFixture,
+      trainingRowsFixture,
     );
-    expect(res).toEqual([{ tramoId: "T0001", prioridad: "baja" }]);
+    expect(res).toEqual([{ segmentId: "T0001", priority: "low" }]);
   });
 
-  it("regla-v1 funciona sin filas (arreglo vacío)", async () => {
-    mockFetchOnce((url, init) => {
+  it("rule-v1 funciona sin filas (arreglo vacío)", async () => {
+    mockFetchOnce((_url, init) => {
       const body = JSON.parse(String(init?.body));
-      expect(body.modelo_id).toBe("regla-v1");
-      expect(body.filas_entrenamiento).toEqual([]);
+      expect(body.model_id).toBe("rule-v1");
+      expect(body.training_rows).toEqual([]);
       return jsonRes({
-        modelo_id: "regla-v1",
-        predicciones: [{ tramo_id: "T0001", prioridad: "baja" }],
+        model_id: "rule-v1",
+        predictions: [{ segment_id: "T0001", priority: "low" }],
       });
     });
     const gw = crearHttpGateway("http://test");
-    const res = await gw.predecirPrioridades("regla-v1", [escenarioFixture.tramos[0]]);
-    expect(res).toEqual([{ tramoId: "T0001", prioridad: "baja" }]);
+    const res = await gw.predictPriorities("rule-v1", [scenarioFixture.segments[0]]);
+    expect(res).toEqual([{ segmentId: "T0001", priority: "low" }]);
   });
 
-  it("planificar conserva orden y repeticiones; costo_total_m opaco", async () => {
-    mockFetchOnce((url) => {
-      expect(url).toContain("/recorridos:planificar");
+  it("planificar conserva orden y repeticiones; total_cost_m opaco", async () => {
+    mockFetchOnce((url, init) => {
+      expect(url).toContain("/routes:plan");
+      const body = JSON.parse(String(init?.body));
+      expect(body.include).toEqual(["medium", "high"]);
       return jsonRes({
-        orden: ["T0001", "T0002", "T0001"],
-        repeticiones: ["T0001"],
-        costo_total_m: 301.8,
-        unidad: "metros",
+        order: ["T0001", "T0002", "T0001"],
+        repetitions: ["T0001"],
+        total_cost_m: 301.8,
+        unit: "meters",
       });
     });
     const gw = crearHttpGateway("http://test");
-    const r = await gw.planificarRecorrido(planInputFixture);
-    expect(r.pasos.map((p) => p.tramoId)).toEqual(["T0001", "T0002", "T0001"]);
-    expect(r.pasos[2]).toMatchObject({ repetido: true });
-    expect(r.costo).toEqual({ valor: 301.8, unidad: "metros" });
+    const r = await gw.planRoute(planInputFixture);
+    expect(r.steps.map((p) => p.segmentId)).toEqual(["T0001", "T0002", "T0001"]);
+    expect(r.steps[2]).toMatchObject({ repeated: true });
+    expect(r.cost).toEqual({ totalCostM: 301.8, unit: "meters" });
   });
 
-  it("RECORRIDO_IMPOSIBLE y PREDICCION_SIN_TRAMO se mapean; red → red", async () => {
+  it("IMPOSSIBLE_ROUTE y PREDICTION_WITHOUT_SEGMENT se mapean; red → network", async () => {
     const gw = crearHttpGateway("http://test");
-    mockFetchOnce(() => jsonRes({ detail: { codigo: "RECORRIDO_IMPOSIBLE" } }, 422));
-    await expect(gw.planificarRecorrido(planInputFixture)).rejects.toMatchObject({
-      codigo: "recorrido-imposible",
+    mockFetchOnce(() => jsonRes({ detail: { code: "IMPOSSIBLE_ROUTE" } }, 422));
+    await expect(gw.planRoute(planInputFixture)).rejects.toMatchObject({
+      code: "impossible-route",
     });
-    mockFetchOnce(() => jsonRes({ detail: { codigo: "PREDICCION_SIN_TRAMO", detalle: "x" } }, 422));
-    await expect(gw.predecirPrioridades("arbol", [escenarioFixture.tramos[0]])).rejects.toMatchObject(
-      { codigo: "tramo-desconocido" },
+    mockFetchOnce(() => jsonRes({ detail: { code: "PREDICTION_WITHOUT_SEGMENT", detail: "x" } }, 422));
+    await expect(gw.predictPriorities("arbol", [scenarioFixture.segments[0]])).rejects.toMatchObject(
+      { code: "prediction-without-segment" },
     );
     vi.stubGlobal(
       "fetch",
@@ -113,6 +116,6 @@ describe("httpGateway: api-v1, único lugar con fetch", () => {
         throw new TypeError("down");
       }),
     );
-    await expect(gw.salud()).rejects.toMatchObject({ codigo: "red" });
+    await expect(gw.health()).rejects.toMatchObject({ code: "network" });
   });
 });

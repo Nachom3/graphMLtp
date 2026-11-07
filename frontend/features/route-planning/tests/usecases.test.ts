@@ -9,22 +9,22 @@ import {
   verificarSalud,
 } from "../application/usecases";
 import { FakeGateway } from "../infrastructure/fakeGateway";
-import type { ErrorOperacion, PlanInput } from "../domain/types";
+import type { OperationError, PlanInput } from "../domain/types";
 import {
-  comparacionFixture,
-  costoFixture,
-  escenarioFixture,
-  filasEntrenamientoFixture,
+  comparisonFixture,
+  costFixture,
+  repeatedRouteIds,
   planInputFixture,
-  prioridadesFixture,
-  recorridoRepetidoIds,
+  prioritiesFixture,
+  scenarioFixture,
+  trainingRowsFixture,
 } from "./fixtures";
 
-function gw(falla: ErrorOperacion | null = null, latenciaMs = 0, ordenForzado?: string[]) {
-  return new FakeGateway(prioridadesFixture, costoFixture, {
-    latenciaMs,
-    falla,
-    ordenForzado,
+function gw(failure: OperationError | null = null, latencyMs = 0, forcedOrder?: string[]) {
+  return new FakeGateway(prioritiesFixture, costFixture, {
+    latencyMs,
+    failure,
+    forcedOrder,
   });
 }
 
@@ -35,20 +35,20 @@ describe("salud y escenario", () => {
   });
 
   it("cargar escenario: grafo, datos y metadatos consistentes", () => {
-    const res = cargarEscenario(new RequestStore(), escenarioFixture);
+    const res = cargarEscenario(new RequestStore(), scenarioFixture);
     expect(res.estado).toBe("exito");
   });
 
-  it("escenario con versión distinta → error version-incompatible", () => {
-    const res = cargarEscenario(new RequestStore(), { ...escenarioFixture, version: "v9" });
+  it("escenario con versión distinta → error version-mismatch", () => {
+    const res = cargarEscenario(new RequestStore(), { ...scenarioFixture, version: "v9" });
     expect(res).toMatchObject({ estado: "error" });
-    if (res.estado === "error") expect(res.error.codigo).toBe("version-incompatible");
+    if (res.estado === "error") expect(res.error.code).toBe("version-mismatch");
   });
 
   it("escenario con FK rota → error", () => {
     const roto = {
-      ...escenarioFixture,
-      tramos: [{ ...escenarioFixture.tramos[0], nodoDestino: "N-XXX" }],
+      ...scenarioFixture,
+      segments: [{ ...scenarioFixture.segments[0], destinationNode: "N-XXX" }],
     };
     const res = cargarEscenario(new RequestStore(), roto);
     expect(res.estado).toBe("error");
@@ -56,30 +56,32 @@ describe("salud y escenario", () => {
 });
 
 describe("comparación: resultados ya calculados, sin HTTP", () => {
-  it("presenta métricas, baseline y configuración", () => {
-    const res = consultarComparacion(new RequestStore(), comparacionFixture);
+  it("presenta métricas, baseline y mejor por CV (forma del backend)", () => {
+    const res = consultarComparacion(new RequestStore(), comparisonFixture);
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
-    expect(res.datos.baseline.length).toBeGreaterThan(0);
-    expect(Object.keys(res.datos.metricasPorModelo).length).toBeGreaterThanOrEqual(2);
+    expect(res.datos.baselineAccuracy).toBeGreaterThan(0);
+    expect(res.datos.metrics.length).toBeGreaterThanOrEqual(2);
+    expect(res.datos.bestByCv.length).toBeGreaterThan(0);
+    expect(res.datos.metrics[0].confusionMatrix.length).toBe(3);
   });
 });
 
-describe("prioridades y recorrido con gateway fake (semántica api-v1)", () => {
-  it("solicitar prioridades: selección válida → prioridades 1:1 por tramo_id", async () => {
+describe("prioridades y recorrido con gateway fake (semántica del backend)", () => {
+  it("solicitar prioridades: selección válida → prioridades 1:1 por segment_id", async () => {
     const res = await solicitarPrioridades(
       gw(),
       new RequestStore(),
       "arbol",
-      [escenarioFixture.tramos[0], escenarioFixture.tramos[1]],
+      [scenarioFixture.segments[0], scenarioFixture.segments[1]],
       undefined,
-      filasEntrenamientoFixture,
+      trainingRowsFixture,
     );
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
     expect(res.datos).toEqual([
-      { tramoId: "T0001", prioridad: "baja" },
-      { tramoId: "T0002", prioridad: "alta" },
+      { segmentId: "T0001", priority: "low" },
+      { segmentId: "T0002", priority: "high" },
     ]);
   });
 
@@ -88,7 +90,7 @@ describe("prioridades y recorrido con gateway fake (semántica api-v1)", () => {
       gw(),
       new RequestStore(),
       "inexistente" as never,
-      [escenarioFixture.tramos[0]],
+      [scenarioFixture.segments[0]],
     );
     expect(res.estado).toBe("error");
   });
@@ -96,37 +98,37 @@ describe("prioridades y recorrido con gateway fake (semántica api-v1)", () => {
   it("selección vacía → estado vacío, sin llamar al backend", async () => {
     const resP = await solicitarPrioridades(gw(), new RequestStore(), "arbol", []);
     expect(resP.estado).toBe("vacio");
-    const vacio: PlanInput = { ...planInputFixture, tramos: [] };
+    const vacio: PlanInput = { ...planInputFixture, segments: [] };
     const resR = await solicitarRecorrido(gw(), new RequestStore(), vacio);
     expect(resR.estado).toBe("vacio");
   });
 
   it("tramo desconocido → error tipado", async () => {
-    const fantasma = { ...escenarioFixture.tramos[0], tramoId: "T9999" };
+    const fantasma = { ...scenarioFixture.segments[0], segmentId: "T9999" };
     const res = await solicitarPrioridades(gw(), new RequestStore(), "arbol", [fantasma]);
     expect(res.estado).toBe("error");
     if (res.estado !== "error") return;
-    expect(res.error.codigo).toBe("tramo-desconocido");
+    expect(res.error.code).toBe("prediction-without-segment");
   });
 
   it("recorrido imposible (falla del backend) → error tipado", async () => {
-    const malo = gw({ codigo: "recorrido-imposible" });
+    const malo = gw({ code: "impossible-route" });
     const res = await solicitarRecorrido(malo, new RequestStore(), planInputFixture);
     expect(res.estado).toBe("error");
     if (res.estado !== "error") return;
-    expect(res.error.codigo).toBe("recorrido-imposible");
+    expect(res.error.code).toBe("impossible-route");
   });
 
   it("recorrido con tramo repetido conserva ambas ocurrencias y su orden; costo opaco sin recalcular", async () => {
-    const orden = gw(null, 0, recorridoRepetidoIds);
+    const orden = gw(null, 0, repeatedRouteIds);
     const res = await solicitarRecorrido(orden, new RequestStore(), planInputFixture);
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
-    expect(res.datos.pasos.map((p) => p.tramoId)).toEqual(recorridoRepetidoIds);
-    expect(res.datos.pasos.filter((p) => p.tramoId === "T0001")).toHaveLength(2);
-    expect(res.datos.pasos[2]).toMatchObject({ tramoId: "T0001", repetido: true });
-    // Costo: se presenta tal cual (costo_total_m), no se deriva de longitudes.
-    expect(res.datos.costo).toEqual(costoFixture);
+    expect(res.datos.steps.map((p) => p.segmentId)).toEqual(repeatedRouteIds);
+    expect(res.datos.steps.filter((p) => p.segmentId === "T0001")).toHaveLength(2);
+    expect(res.datos.steps[2]).toMatchObject({ segmentId: "T0001", repeated: true });
+    // Costo: se presenta tal cual (total_cost_m), no se deriva de longitudes.
+    expect(res.datos.cost).toEqual(costFixture);
   });
 
   it("respuesta tardía no reemplaza el resultado vigente", async () => {

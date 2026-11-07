@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { ApiGateway, RequestStore } from "../../application/usecases";
 import { RequestStore as Store } from "../../application/usecases";
-import type { EstadoOperacion } from "../../domain/types";
+import type { OperationState } from "../../domain/types";
 
 /**
  * Hook genérico: ejecuta un caso de uso con el gateway inyectado,
@@ -16,12 +16,12 @@ export function useOperacion<T, A extends unknown[]>(
     gw: ApiGateway,
     store: RequestStore,
     ...args: [...A, AbortSignal?]
-  ) => Promise<EstadoOperacion<T>>,
-): [EstadoOperacion<T> | { estado: "ociosa" }, (...args: A) => Promise<void>] {
+  ) => Promise<OperationState<T>>,
+): [OperationState<T> | { estado: "ociosa" }, (...args: A) => Promise<void>] {
   // Store estable sin acceder a refs durante el render (react-hooks/refs).
   const [store] = useState(() => new Store());
   const abortRef = useRef<AbortController | null>(null);
-  const [estado, setEstado] = useState<EstadoOperacion<T> | { estado: "ociosa" }>({
+  const [estado, setEstado] = useState<OperationState<T> | { estado: "ociosa" }>({
     estado: "ociosa",
   });
   const correr = useCallback(

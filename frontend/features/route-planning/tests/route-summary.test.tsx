@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { EstadoVista } from "../../../components/operation-status";
 import { LeyendaPrioridades } from "../components/priority-legend";
 import { ResumenRecorrido } from "../components/route-summary";
-import { costoFixture } from "./fixtures";
+import { costFixture } from "./fixtures";
 import { conRepeticiones } from "../domain/types";
 
 describe("presentación: estados con datos controlados", () => {
@@ -21,19 +21,19 @@ describe("presentación: estados con datos controlados", () => {
         estado={{
           estado: "error",
           requestId: 1,
-          error: { codigo: "red", detalle: "Servicio no disponible" },
+          error: { code: "network", detail: "Servicio no disponible" },
         }}
       />,
     );
     expect(screen.getByRole("status").textContent).toContain(
-      "Error (red): Servicio no disponible.",
+      "Error (network): Servicio no disponible.",
     );
     rerender(
       <EstadoVista
-        estado={{ estado: "error", requestId: 1, error: { codigo: "recorrido-imposible" } }}
+        estado={{ estado: "error", requestId: 1, error: { code: "impossible-route" } }}
       />,
     );
-    expect(screen.getByRole("status").textContent).toContain("recorrido-imposible");
+    expect(screen.getByRole("status").textContent).toContain("impossible-route");
   });
 
   it("leyenda con etiqueta y patrón (no solo color)", () => {
@@ -45,9 +45,9 @@ describe("presentación: estados con datos controlados", () => {
 
   it("resumen muestra pasos, repetidos y costo del backend", () => {
     const pasos = conRepeticiones(["T0001", "T0002", "T0001"]);
-    render(<ResumenRecorrido pasos={pasos} costo={costoFixture} />);
+    render(<ResumenRecorrido pasos={pasos} costo={costFixture} />);
     expect(screen.getByText(/3 pasos/)).toBeDefined();
     expect(screen.getByText(/repetido/)).toBeDefined();
-    expect(screen.getByText(new RegExp(String(costoFixture.valor)))).toBeDefined();
+    expect(screen.getByText(new RegExp(String(costFixture.totalCostM)))).toBeDefined();
   });
 });
