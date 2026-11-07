@@ -11,6 +11,7 @@ Usage (from repo root)::
 
     python scripts/train_compare.py
     python scripts/train_compare.py --source dataset/salida/tramos.csv --seed 0
+    python scripts/train_compare.py --figures docs/figs
 """
 from __future__ import annotations
 
@@ -42,10 +43,81 @@ def per_class_ovr(matrix):
     return out
 
 
+def save_figures(prepared, comparison, output_dir: Path, seed: int) -> list[Path]:
+    """Save comparison, validation-confusion, and winning-tree figures."""
+    import matplotlib.pyplot as plt
+    import numpy as np
+    from sklearn.metrics import ConfusionMatrixDisplay
+    from sklearn.tree import plot_tree
+
+    from collection.adapters.models.model_specs import build_pipeline
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    models = comparison.metrics
+    labels = [metric.model_id for metric in models]
+    positions = np.arange(len(models))
+    means = [metric.cv_f1_macro_mean for metric in models]
+    deviations = [metric.cv_f1_macro_std for metric in models]
+    validation = [metric.validation_f1_macro for metric in models]
+    ax.bar(positions - 0.2, means, width=0.4, yerr=deviations, capsize=4, label="CV F1 macro ± std")
+    ax.bar(positions + 0.2, validation, width=0.4, label="Validación F1 macro")
+    ax.set_xticks(positions, labels)
+    ax.set_ylim(0, 1.05)
+    ax.set_ylabel("F1 macro")
+    ax.set_title("CV (solo train) vs validación")
+    ax.legend()
+    fig.tight_layout()
+    path = output_dir / "f1_comparacion.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    paths.append(path)
+
+    fig, axes = plt.subplots(1, len(models), figsize=(4 * len(models), 4))
+    for ax, metric in zip(axes, models, strict=True):
+        ConfusionMatrixDisplay(
+            confusion_matrix=np.asarray(metric.validation_confusion_matrix),
+            display_labels=CLASS_ORDER,
+        ).plot(ax=ax, colorbar=False, cmap="Blues", values_format="d")
+        ax.set_title(metric.model_id)
+    fig.tight_layout()
+    path = output_dir / "matrices_confusion_validacion.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    paths.append(path)
+
+    train = prepared.partitions["train"].indices
+    X_train = prepared.X.iloc[list(train)]
+    y_train = prepared.y.iloc[list(train)]
+    tree = build_pipeline("arbol", prepared.preprocessor, seed=seed)
+    tree.fit(X_train, y_train)
+    preprocessor_name = next(name for name in tree.named_steps if name != "decisiontreeclassifier")
+    fig, ax = plt.subplots(figsize=(18, 9))
+    plot_tree(
+        tree.named_steps["decisiontreeclassifier"],
+        feature_names=tree.named_steps[preprocessor_name].get_feature_names_out(),
+        class_names=list(CLASS_ORDER),
+        filled=True,
+        rounded=True,
+        max_depth=3,
+        ax=ax,
+    )
+    ax.set_title("Árbol ganador (ajustado solo en train, profundidad máxima 3)")
+    fig.tight_layout()
+    path = output_dir / "arbol_ganador.png"
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    paths.append(path)
+    return paths
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare #10 classifiers (seed 0).")
     parser.add_argument("--source", default="dataset/salida/tramos.csv")
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--figures", type=Path, default=None, metavar="DIR")
     args = parser.parse_args()
 
     prepared = prepare_dataset(args.source, seed=args.seed)
@@ -84,6 +156,9 @@ def main() -> int:
         f"acc={chosen.test_accuracy:.4f} f1={chosen.test_f1_macro:.4f}"
     )
     print("NOTA: metricas = ajuste a la regla sintetica, no desempeno operativo.")
+    if args.figures is not None:
+        for path in save_figures(prepared, comparison, args.figures, args.seed):
+            print(f"figura: {path}")
     return 0
 
 

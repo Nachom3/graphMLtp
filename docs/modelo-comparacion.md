@@ -156,6 +156,63 @@ interpretabilidad y costo. El 1.0 en test no prueba utilidad operativa.
 - Las métricas miden ajuste a esta regla construida, no desempeño
   operativo real. Foto única T0, sin series temporales.
 
+## Por qué no regresión lineal ("¿cuánto va a costar?")
+
+El curso (sesión 3, `notebook-1-regresion-lineal`) usa regresión lineal
+para valor continuo. En este TP el costo (`costo_total_m`) no se predice
+con ML: se **calcula** exacto desde el grafo (suma de `longitud_m` +
+repeticiones de Hierholzer / cartero chino) sobre los tramos incluidos
+(media/alta). El dataset no trae etiqueta de costo y el costo depende de
+la topología global + la selección, no solo de las features de un tramo.
+Por eso la tarea ML es **clasificación** de prioridad (baja/media/alta) y
+el árbol tampoco predice costo: predice prioridad y el costo sale después
+del planificador. Una regresión directa de costo perdería trazabilidad y
+rompería la separación clasificación → grafos.
+
+## Por qué la regla es agresiva (y qué pasa si se mueve)
+
+Con peso 2 en días, 1 día solo ya da score 2 = media y 2 días dan 4 =
+alta sin importar el resto. Es agresiva a drede: la regla original (#8,
+umbrales 10/16) daba 99.7% baja con datos reales, se recalibró a 0/2 para
+poblar las tres clases en este CSV (129/93/75). En el CSV actual
+`dias ∈ {0: 275, 1: 22}`, `contenedores {0: 210, 1: 51, 2: 30, 3: 6}`,
+quejas media 0.59 (75% en cero, max 6): por eso el peso de días hoy mueve
+poco, pero con varios días la regla empuja todo a alta (latente, no
+observado). Si la distribución base cambia, se re-tuna acá y se registra
+el nuevo balance; nunca desde validación/test.
+
+Sensibilidad medida con seed 0 (mismas quejas sintéticas, solo cambia la
+regla; reproducible con `python scripts/analyze_rule_sensitivity.py`):
+
+| Variante | baja | media | alta |
+|---|---|---|---|
+| Base `2*d+1*c+1*zw+2*q`, baja<=0 media<=2 | 129 (43.4%) | 93 (31.3%) | 75 (25.3%) |
+| `baja_max` 0→1 | 165 (55.6%) | 57 (19.2%) | 75 (25.3%) |
+| `media_max` 2→3 | 129 (43.4%) | 104 (35.0%) | 64 (21.5%) |
+| `media_max` 2→1 | 129 (43.4%) | 36 (12.1%) | 132 (44.4%) |
+| peso días 2→1 | 129 (43.4%) | 94 (31.6%) | 74 (24.9%) |
+| peso quejas 2→1 | 129 (43.4%) | 100 (33.7%) | 68 (22.9%) |
+| peso quejas 2→3 | 129 (43.4%) | 93 (31.3%) | 75 (25.3%) sin cambio |
+
+Lectura: mover `baja_max` vacía media; mover `media_max` trasvasa
+media↔alta (a 1, alta explota a 44.4%); el peso de días hoy casi no mueve
+porque casi no hay días>0, pero con días 2+ dominaría. El árbol seguiría
+dando ~1.0 con la regla nueva porque la aprende exacto: tunear la regla
+mirando métricas es circular.
+
+Procedimiento de cambio: proponer en issue, tocar solo `SCORE_LOW_MAX` /
+`SCORE_MEDIUM_MAX` + `SCORE_FORMULA` en `synthetic_complaints.py`, re-correr
+`prepare + compare` entero, registrar el nuevo balance y dar por invalidado
+el test anterior (nuevo test de un solo uso).
+
+## Figuras
+
+El script las genera opcionalmente con `python scripts/train_compare.py --figures docs/figs`; el notebook también las produce y muestra al ejecutar su última celda.
+
+- [`docs/figs/f1_comparacion.png`](figs/f1_comparacion.png): compara F1 macro medio de CV (barras de error = desviación estándar) con F1 de validación.
+- [`docs/figs/matrices_confusion_validacion.png`](figs/matrices_confusion_validacion.png): muestra aciertos y confusiones por modelo; filas reales y columnas predichas, orden baja/media/alta.
+- [`docs/figs/arbol_ganador.png`](figs/arbol_ganador.png): árbol final re-ajustado solo en train, truncado a profundidad 3 para facilitar la lectura.
+
 ## Bugs reconocidos y correcciones (#10)
 
 1. `EvaluationProtocol(test_size=0.25)` no representaba el 60/20/20 de
