@@ -1,0 +1,1 @@
+export { ResumenRecorrido } from "./RouteSummary";
