@@ -16,6 +16,7 @@ Rama: `18-preparar-datos-ml` | Entrega: `feature-branch-chain` | Pruebas: `pytes
 - **S10:** «Move el .worktrees afuera en documentos/ y crea un folder worktrees/ o algo asi..»
 - **S11:** «Also, rebase the branch»
 - **S12:** «Me teacher uses make_pipeline, not pipeline»
+- **S13:** Issue #18: «Dividir los ejemplos de forma reproducible en aproximadamente 60% entrenamiento, 20% validación y 20% test, con semilla `0` y estratificación por prioridad cuando sea viable.»
 
 ## Tasks
 
@@ -24,6 +25,9 @@ Rama: `18-preparar-datos-ml` | Entrega: `feature-branch-chain` | Pruebas: `pytes
 - T2 [S2–S9, S12] ruta: delegado (context backstop) + ajuste inline; estado: completado; commit: `4d083e8`, `e2960dd` — Implementar generación simple, preparación y pruebas con documentación de uso.
 - T5 [S11] ruta: inline; estado: completado; commit: n/a — Rebasar la rama sobre `main`, preservando los cambios.
 - T3 [S2–S9, S11–S12] ruta: verificación según riesgo; estado: completado; commit: `e2960dd` y cierre de seguimiento — Verificar el comportamiento público, el CSV original y la suite; cerrar el trabajo.
+- T6 [S8, S13] ruta: delegado (context backstop); estado: completado; commit: `5cdd8e8` — Corregir la estratificación cuando un reparto viable preserva las clases y probar la regresión.
+- T7 [S8, S13] ruta: inline; estado: bloqueado (espera corrección independiente del notebook heredado); commit: `5cdd8e8` — Verificar el reparto, la suite y las limitaciones previas de CI.
+- T8 [S13] ruta: inline; estado: en curso; commit: n/a — Publicar la rama y preparar la PR autorizada.
 
 ## Log
 
@@ -56,3 +60,7 @@ Rama: `18-preparar-datos-ml` | Entrega: `feature-branch-chain` | Pruebas: `pytes
 - L27: El issue #10 y la documentación ahora exigen `GridSearchCV` con grilla pequeña, en línea con S4. No se inició el entrenamiento de #10.
 - L28: Segundo corte `e2960dd`: 756 líneas cambiadas. La suite de su índice aislado pasó con 11 pruebas; `git diff --check` pasó y el objeto del CSV coincide con `main`. `assess` informó riesgo medio y `reviewDue=false`; no se inició revisión nativa.
 - L29: El segundo corte requiere una excepción de tamaño para su futura revisión si se conserva cohesivo; no se hizo push ni se creó PR. Los issues siguen abiertos.
+- L30: «Si, fue quien lo estaba implementado, Ok ejecuta el cambio y pushea y crea la pr.»
+- L31: Review: con 17 tramos y clases alta/media/baja 9/4/4, semilla 0, el fallback sin estratificar deja media fuera de validación y baja fuera de test pese a existir un reparto viable 10/3/4. El smoke del notebook también falla en `main`, independientemente del issue #18.
+- L32: El worker observó RED en el caso de cobertura y en las regresiones de dataset vacío y semilla inválida. La corrección quedó en `5cdd8e8`; las pruebas focalizadas pasaron con 12 casos, la suite de backend con 15, y el CSV no difiere de `origin/main`. `assess` devolvió riesgo medio y `reviewDue=false`.
+- L33: El smoke del notebook sigue fuera del alcance de #18 y ya falla en `main` (`d60ea85`, run 42401443984). La segunda unidad cohesiva suma 933 líneas cambiadas respecto del primer corte y requiere una decisión de excepción de tamaño para la cadena de revisión.
