@@ -1,6 +1,7 @@
 """Read-only dataset validation, synthetic labels, and reproducible partitions."""
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
@@ -10,6 +11,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.utils import check_random_state
 
 from .synthetic_complaints import (
     COMPLAINT_MAX,
@@ -75,6 +77,8 @@ def _load_frame(source: str | Path | pd.DataFrame) -> pd.DataFrame:
 
 
 def _validate(frame: pd.DataFrame) -> None:
+    if frame.empty:
+        raise ValueError("dataset must contain at least one row")
     missing_columns = sorted(set(REQUIRED_COLUMNS) - set(frame.columns))
     if missing_columns:
         raise ValueError(f"missing required columns: {', '.join(missing_columns)}")
@@ -108,7 +112,57 @@ def _validate(frame: pd.DataFrame) -> None:
         raise ValueError(f"invalid prioridad_recoleccion values: {invalid_labels}")
 
 
+def _coverage_split(y: pd.Series, seed: int) -> dict[str, tuple[int, ...]] | None:
+    names = ("train", "validation", "test")
+    n = len(y)
+    train_size = int(n * 0.6)
+    validation_size = int((n - train_size) * 0.5)
+    sizes = (train_size, validation_size, n - train_size - validation_size)
+    labels = list(dict.fromkeys(y.tolist()))
+    if min(sizes) < len(labels) or any(
+        int(y.eq(label).sum()) < len(names) for label in labels
+    ):
+        return None
+
+    rng = random.Random(seed)
+    allocations = {name: [] for name in names}
+    used = {label: [0, 0, 0] for label in labels}
+    # Reserve one row per class per partition, then allocate remaining rows to
+    # the most underfilled class/split quota without changing the split sizes.
+    groups = {}
+    label_values = y.tolist()
+    for label in labels:
+        indices = [index for index, value in enumerate(label_values) if value == label]
+        rng.shuffle(indices)
+        groups[label] = indices
+        for split in range(len(names)):
+            index = indices.pop()
+            allocations[names[split]].append(int(index))
+            used[label][split] += 1
+
+    class_counts = {label: int(y.eq(label).sum()) for label in labels}
+    for label in labels:
+        for index in groups[label]:
+            candidates = [
+                i for i, name in enumerate(names) if len(allocations[name]) < sizes[i]
+            ]
+            split = max(
+                candidates,
+                key=lambda i: (
+                    class_counts[label] * sizes[i] / n - used[label][i],
+                    sizes[i] - len(allocations[names[i]]),
+                    -i,
+                ),
+            )
+            allocations[names[split]].append(int(index))
+            used[label][split] += 1
+    if any(len(allocations[name]) != sizes[i] for i, name in enumerate(names)):
+        return None
+    return {name: tuple(indices) for name, indices in allocations.items()}
+
+
 def _split_indices(y: pd.Series, seed: int) -> tuple[dict[str, tuple[int, ...]], bool]:
+    check_random_state(seed)
     all_indices = list(range(len(y)))
     try:
         train_idx, remainder_idx = train_test_split(
@@ -125,6 +179,9 @@ def _split_indices(y: pd.Series, seed: int) -> tuple[dict[str, tuple[int, ...]],
         )
         stratified = True
     except ValueError:
+        coverage_split = _coverage_split(y.reset_index(drop=True), seed)
+        if coverage_split is not None:
+            return coverage_split, True
         train_idx, remainder_idx = train_test_split(
             all_indices, test_size=0.4, random_state=seed, shuffle=True
         )
@@ -203,6 +260,11 @@ def prepare_dataset(
     metadata = {
         "seed": seed,
         "stratified": stratified,
+        "stratification_limitation": (
+            None
+            if stratified
+            else "class coverage in all three splits is infeasible; using an unstratified split"
+        ),
         "sizes": {name: part.metadata["size"] for name, part in partitions.items()},
         "class_distribution": _class_distribution(y),
         "label_status": "synthetic",
@@ -222,7 +284,7 @@ def prepare_dataset(
                 "alta_min_exclusive": SCORE_MEDIUM_MAX,
             },
         },
-        "split_rounding": "train_test_split: 60% train, remainder split equally; sizes rounded by sklearn",
+        "split_rounding": "train_test_split: 60% train, remainder split equally; sizes rounded by sklearn. If standard stratification fails but every class can fit in all three splits, deterministic class-aware allocation preserves those sizes and class coverage; otherwise an unstratified split is used and stratification_limitation explains the infeasibility.",
         "split_ids": {name: part.metadata["tramo_ids"] for name, part in partitions.items()},
     }
     return MLPreparation(enriched, X, y, tramo_ids, partitions, metadata, preprocessor)

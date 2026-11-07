@@ -49,7 +49,12 @@ con índices/IDs/distribuciones y un `ColumnTransformer` categórico sin ajustar
   `historico_quejas_vecinales`; `y`: `prioridad_recoleccion`; `tramo_id` solo
   para trazabilidad. Split por semilla 0 y estratificación cuando viable:
   178/59/60 filas en este CSV; primero 60 % train y luego el resto dividido
-  por mitades, con los IDs y distribución de cada partición registrados.
+  por mitades, con los IDs y distribución de cada partición registrados. Se
+  conservan esos tamaños redondeados por sklearn; si falla la estratificación
+  estándar pero cada clase puede aparecer en las tres partes, se usa una
+  asignación determinista clase-a-clase. Si la cobertura es imposible, el
+  reparto es no estratificado y `stratification_limitation` lo informa
+  explícitamente.
 - #18 no entrena ni selecciona clasificadores. #10 ajusta el pipeline completo
   dentro de CV/GridSearchCV, contrasta en validación y usa test una sola vez.
   `tipo_zona` usa OneHot con `handle_unknown="ignore"`; las numéricas pasan

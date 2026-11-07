@@ -71,7 +71,12 @@ results = cross_validate(
 ```
 
 La preparación predeterminada sortea enteros `[0, 3]` anónimos por contenedor,
-los suma por tramo y construye la etiqueta con peso 2 para quejas. La etiqueta
+los suma por tramo y construye la etiqueta con peso 2 para quejas. Las particiones
+mantienen el redondeo de `train_test_split` (60 % train y el resto en mitades):
+si la estratificación estándar falla, una asignación determinista alternativa
+conserva tamaños y cobertura por clase cuando es viable. Si no lo es, se usa un
+reparto no estratificado y `metadata["stratification_limitation"]` explica la
+limitación; `metadata["stratified"]` no lo presenta como estratificado. La etiqueta
 anterior y la nueva son sintéticas; ver [`PLAN.md`](../PLAN.md) para los
 parámetros y la distribución observada del CSV actual. En #10, el pipeline
 completo se entregará sin ajustar a CV/GridSearchCV para que cada fold ajuste

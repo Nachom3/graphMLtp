@@ -106,6 +106,107 @@ def test_splits_are_disjoint_exhaustive_stable_and_stratified_when_feasible():
     assert all("tramo_ids" in part.metadata for part in one.partitions.values())
 
 
+def test_empty_dataset_is_rejected_by_public_preparation_interface():
+    empty = fixture_rows().iloc[:0].copy()
+
+    with pytest.raises(ValueError, match="dataset must contain at least one row"):
+        prepare_dataset(empty)
+
+
+def test_negative_seed_is_rejected_even_when_fallback_split_is_feasible():
+    labels = ["alta"] * 9 + ["media"] * 4 + ["baja"] * 4
+    data = pd.DataFrame(
+        [
+            {
+                "tramo_id": f"N{index:02}",
+                "tipo_zona": "residencial",
+                "cantidad_contenedores": 0,
+                "dias_desde_ultima_recoleccion": {
+                    "alta": 2,
+                    "media": 1,
+                    "baja": 0,
+                }[label],
+                "prioridad_recoleccion": label,
+            }
+            for index, label in enumerate(labels)
+        ]
+    )
+
+    with pytest.raises(ValueError, match="Seed must be"):
+        prepare_dataset(data, seed=-1)
+
+
+def test_small_feasible_stratified_split_preserves_each_class_deterministically():
+    labels = ["alta"] * 9 + ["media"] * 4 + ["baja"] * 4
+    data = pd.DataFrame(
+        [
+            {
+                "tramo_id": f"R{index:02}",
+                "tipo_zona": "residencial",
+                "cantidad_contenedores": 0,
+                "dias_desde_ultima_recoleccion": {
+                    "alta": 2,
+                    "media": 1,
+                    "baja": 0,
+                }[label],
+                "prioridad_recoleccion": label,
+            }
+            for index, label in enumerate(labels)
+        ]
+    )
+
+    one = prepare_dataset(data, seed=0)
+    two = prepare_dataset(data, seed=0)
+
+    assert one.metadata["class_distribution"] == {"baja": 4, "media": 4, "alta": 9}
+    assert one.metadata["sizes"] == {"train": 10, "validation": 3, "test": 4}
+    assert one.metadata["stratified"] is True
+    expected_distributions = {
+        "train": {"baja": 2, "media": 2, "alta": 6},
+        "validation": {"baja": 1, "media": 1, "alta": 1},
+        "test": {"baja": 1, "media": 1, "alta": 2},
+    }
+    for name in ("train", "validation", "test"):
+        partition = one.partitions[name]
+        assert partition.metadata["class_distribution"] == expected_distributions[name]
+        assert partition.indices == two.partitions[name].indices
+        assert partition.metadata["tramo_ids"] == two.partitions[name].metadata["tramo_ids"]
+    memberships = [set(part.indices) for part in one.partitions.values()]
+    assert not memberships[0] & memberships[1]
+    assert not memberships[0] & memberships[2]
+    assert not memberships[1] & memberships[2]
+    assert set.union(*memberships) == set(range(len(data)))
+    assert [len(one.partitions[name].indices) for name in ("train", "validation", "test")] == [10, 3, 4]
+    assert one.X.index.equals(one.y.index)
+    assert one.tramo_ids.tolist() == data["tramo_id"].tolist()
+
+
+def test_infeasible_class_coverage_is_reported_as_unstratified():
+    labels = ["alta"] * 15 + ["media", "baja"]
+    data = pd.DataFrame(
+        [
+            {
+                "tramo_id": f"I{index:02}",
+                "tipo_zona": "residencial",
+                "cantidad_contenedores": 0,
+                "dias_desde_ultima_recoleccion": {
+                    "alta": 2,
+                    "media": 1,
+                    "baja": 0,
+                }[label],
+                "prioridad_recoleccion": label,
+            }
+            for index, label in enumerate(labels)
+        ]
+    )
+
+    prepared = prepare_dataset(data, seed=0)
+
+    assert prepared.metadata["stratified"] is False
+    assert prepared.metadata["stratification_limitation"] is not None
+    assert "infeasible" in prepared.metadata["stratification_limitation"]
+
+
 def test_encoder_ignores_category_unknown_to_its_training_partition():
     prepared = prepare_dataset(fixture_rows(), seed=7)
     train = prepared.X.iloc[list(prepared.partitions["train"].indices)].copy()
