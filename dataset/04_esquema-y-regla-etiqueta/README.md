@@ -20,15 +20,19 @@
 | `tipo_zona` | categórica | `residencial` / `comercial` / `industrial` | Simulado (60/25/15), semilla en #9 |
 | `cantidad_contenedores` | entero ≥ 0 | Contenedores del tramo por cercanía | Real-derivado (snap, radio en #9) |
 | `dias_desde_ultima_recoleccion` | entero ≥ 0 | Días desde última recolección en T0 | Real (levantes, `daysWithoutLift`) |
-| `prioridad_recoleccion` | categórica | `baja` / `media` / `alta` (a predecir) | **Construida**, regla v1 |
+| `historico_quejas_vecinales` | entero ≥ 0 | Suma de conteos anónimos por contenedor | Sintético en memoria (#18); no se escribe al CSV fuente |
+| `prioridad_recoleccion` | categórica | `baja` / `media` / `alta` (a predecir) | Etiqueta #9 en fuente; #18 la reemplaza en memoria con regla sintética |
 
 Semántica: cada fila es un tramo en una foto de referencia T0 (`2026-10-23`).
 Sin series temporales en v1.
 
-> `historico_quejas_vecinales` se **eliminó** (decisión de equipo, issue #9):
-> la fuente Por Mi Barrio termina en 2020 y no aporta señal en la foto T0.
+> El CSV fuente #9 no incluye `historico_quejas_vecinales`: la fuente Por Mi
+> Barrio termina en 2020. #18 genera en memoria conteos **sintéticos** por cada
+> contenedor representado, los suma por tramo y calcula una nueva etiqueta; no
+> escribe estos campos en el CSV. No existen IDs de contenedor para identificar
+> los sorteos individualmente.
 
-## Regla de etiqueta v1 (construida, pública, no oficial)
+## Regla anterior del #9 (construida y sintética, no oficial)
 
 ```text
 zona_w = 2 si comercial, 1 si industrial, 0 si residencial
@@ -37,13 +41,21 @@ score  = 2*dias_desde_ultima_recoleccion
 baja si score <= 0 | media si 1-2 | alta si score >= 3
 ```
 
-La regla original (issue #8) incluía `3*historico_quejas_vecinales` y umbrales
-`baja ≤ 10, media 11–16, alta ≥ 17`; con los datos reales daba 99.7 % "baja".
-Sin quejas, umbrales recalibrados → balance **43.4 % baja / 42.1 % media /
-14.5 % alta**. El modelo aprenderá esta regla: la métrica no prueba utilidad
-operativa real y así debe decir el informe.
+En 297 tramos, el balance de esta etiqueta #9 fue **43.4 % baja / 42.1 % media /
+14.5 % alta**. La nueva etiqueta de #18 es también sintética y reemplaza esta
+etiqueta solo en la preparación en memoria.
 
-## Ejemplos (verificados contra la regla)
+## Regla sintética de #18
+
+Con seed predeterminada `0`, cada contenedor representado recibe un sorteo
+uniforme `[0, 3]`; se suman por tramo y cero contenedores produce cero quejas.
+La etiqueta usa `score=2*dias + contenedores + zona_w + 2*quejas`, con
+`zona_w={residencial: 0, industrial: 1, comercial: 2}`; baja `<=0`, media `1..2`,
+alta `>2`. En el CSV actual la distribución resultante es 129/297 baja (43.4 %),
+93/297 media (31.3 %) y 75/297 alta (25.3 %). Ninguna etiqueta es una prioridad
+operativa observada, y una buena métrica no demuestra utilidad operativa real.
+
+## Ejemplos de la etiqueta fuente #9 (verificados contra la regla anterior)
 
 | tramo | zona | cont. | días | score | prioridad |
 |---|---|---|---|---|---|
@@ -64,7 +76,7 @@ Semilla fija y versionada. Pasos: 1) clip al bbox y
 construcción del grafo + componente conexo mayor; 2) snap de contenedores;
 3) `dias_desde_ultima_recoleccion` real; 4) `tipo_zona` simulada; 5) regla v1
 y reporte de balance; 6) escritura de `nodos.csv`/`tramos.csv` + `README` de
-procedencia. La partición train/test (sesión 2: `train_test_split`,
-encoding de `tipo_zona` con lo visto en clase) y las métricas
-(sesión 5: accuracy/precisión/recall/F1, matriz, validación cruzada)
-son del issue #10.
+procedencia. El issue #18 lee el CSV sin cambiarlo y deja en memoria la validación,
+partición reproducible 60/20/20 y transformación de `tipo_zona` sin ajustar.
+El issue #10 entrena y compara modelos, con CV sobre entrenamiento y test
+reservado.

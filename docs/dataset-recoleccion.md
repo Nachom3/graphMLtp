@@ -4,8 +4,12 @@ Decisión: dataset **mixto** en una zona piloto de Montevideo.
 
 - Geometría y red vial: **real-derivada** de OpenStreetMap (extracto Geofabrik Uruguay).
 - Contenedores por tramo: **real-derivados** de coordenadas públicas de contenedores de Montevideo.
-- Variables operativas: `dias_desde_ultima_recoleccion` real (levantes, foto T0) y `tipo_zona` simulada con semilla (issue #9). `historico_quejas_vecinales` se **eliminó** del esquema (decisión de equipo: la fuente Por Mi Barrio termina en 2020 y no aporta a T0).
-- Etiqueta (`prioridad_recoleccion`): **construida** con una regla pública v1. No es una prioridad oficial del municipio.
+- Variables operativas: `dias_desde_ultima_recoleccion` real (levantes, foto T0), `tipo_zona` simulada con semilla (#9) y `historico_quejas_vecinales` **sintético** (#18). No hay registros históricos reales de quejas para estos tramos: se generan conteos anónimos por contenedor representado, sin IDs individuales.
+- Etiqueta (`prioridad_recoleccion`): **construida y sintética**. La regla #9 y la regla #18 son etiquetas derivadas, no prioridades oficiales del municipio.
+
+> #18 prepara en memoria el CSV existente, sin reescribirlo. La etiqueta
+> original del #9 se conserva como `prioridad_recoleccion_original`; para ML
+> se usa la nueva regla con quejas sintéticas descrita abajo.
 
 ## Zona piloto v1
 
@@ -46,28 +50,34 @@ Licencias y atribución: OSM exige ODbL con atribución a OpenStreetMap y sus co
 | `tipo_zona`                     | categórica              | `residencial` / `comercial` / `industrial`     | Simulado, regla + semilla en #9 (≈60/25/15)                                        |
 | `cantidad_contenedores`         | entero ≥ 0              | Contenedores asignados al tramo por cercanía   | Real-derivado (snap de coordenadas al tramo más cercano; radio y desempates en #9) |
 | `dias_desde_ultima_recoleccion` | entero ≥ 0              | Días desde la última recolección en la foto T0 | Real (levantes, `daysWithoutLift`)                                                 |
-| `prioridad_recoleccion`         | categórica              | `baja` / `media` / `alta`; variable a predecir | **Construida** por la regla v1 de abajo; no oficial                                |
+| `historico_quejas_vecinales`    | entero ≥ 0              | Suma sintética de sorteos anónimos por contenedor representado | En memoria (#18), no se escribe al CSV fuente; no son quejas observadas ni IDs individuales |
+| `prioridad_recoleccion`         | categórica              | `baja` / `media` / `alta`; variable a predecir | Etiqueta #9 en fuente; #18 la sustituye en memoria con regla sintética            |
 
 Semántica temporal: cada fila es un tramo en una foto de referencia T0 (fecha a fijar en el issue #9). `dias_*` mira hacia atrás desde T0. No hay series temporales en v1.
 
-## Regla de etiqueta v1 (construida, pública)
+## Etiquetas sintéticas: regla #9 anterior y regla #18 nueva
+
+La etiqueta #9 se construyó sin quejas: `score = 2*dias + contenedores +
+zona_w`, con `zona_w={comercial: 2, industrial: 1, residencial: 0}` y umbrales
+baja `<=0`, media `1..2`, alta `>=3`. Su balance en 297 tramos fue 43.4 % baja,
+42.1 % media y 14.5 % alta. No son valores observados de prioridad.
+
+Para #18, cada contenedor representado recibe un entero sintético uniforme
+`[0, 3]` (seed predeterminada `0`); se agregan los sorteos por tramo. Si el
+conteo de contenedores es cero, las quejas son cero. No existen IDs de
+contenedor en la entrada, por lo que esos sorteos no se pueden identificar
+individualmente. Nueva regla sintética:
 
 ```text
-zona_w = 2 si comercial, 1 si industrial, 0 si residencial
-score  = 2 * dias_desde_ultima_recoleccion
-       + 1 * cantidad_contenedores
-       + zona_w
-baja  si score <= 0
-media si 1 <= score <= 2
-alta  si score >= 3
+score = 2*dias + 1*contenedores + zona_w + 2*quejas
+baja si score <= 0 | media si 1..2 | alta si > 2
 ```
 
-Recalibración (issue #9): la regla original (con `3 * historico_quejas_vecinales`
-y umbrales ≤10/11–16/≥17) daba 99.7 % baja con los datos reales. Sin quejas,
-umbrales recalibrados → balance 43.4 % baja / 42.1 % media / 14.5 % alta. El
-modelo aprenderá esta regla; una buena métrica no prueba utilidad operativa real.
+En el CSV actual, con seed `0`, la nueva etiqueta da 129/297 baja (43.4 %),
+93/297 media (31.3 %) y 75/297 alta (25.3 %). El modelo aprende esta regla
+construida; ninguna etiqueta ni métrica demuestra utilidad operativa real.
 
-## Ejemplos ilustrativos (coherentes con la regla v1)
+## Ejemplos ilustrativos del dataset base #9 (regla sin quejas)
 
 | `tramo_id` | `nodo_origen` | `nodo_destino` | `longitud_m` | `tipo_zona` | `cantidad_contenedores` | `dias_desde_ultima_recoleccion` | `score` | `prioridad_recoleccion` |
 | ---------- | ------------- | -------------- | ------------ | ----------- | ----------------------- | ------------------------------- | ------- | ----------------------- |
@@ -77,10 +87,10 @@ modelo aprenderá esta regla; una buena métrica no prueba utilidad operativa re
 | T0004      | N0001         | N0005          | 74.2         | comercial   | 1                       | 0                               | 3       | alta                    |
 | T0005      | N0005         | N0006          | 142.8        | residencial | 2                       | 1                               | 4       | alta                    |
 
-## Qué queda para los issues #9 y #10
+## Preparación y siguiente paso
 
-- #9: script reproducible con semilla; clip OSM al bbox; construcción del grafo y componente conexo; snap de contenedores; generación de variables simuladas; aplicación de la regla y balance final; partición documentada.
-- #10: comparación de clasificadores con test separado; las predicciones alimentan la selección de tramos y el circuito (Hierholzer / cartero chino).
+- #9 genera el CSV fuente reproducible. #18 lo lee sin modificarlo, agrega en memoria la queja sintética, valida, crea `X`/`y`, las particiones 60/20/20 reproducibles y un `ColumnTransformer` sin ajustar.
+- #10 ajusta la preparación dentro de cada fold, compara clasificadores con CV solo en train, contrasta en validación y evalúa test una sola vez; las predicciones alimentan selección de tramos y circuito (Hierholzer / cartero chino).
 
 ## Limitaciones conocidas
 

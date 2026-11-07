@@ -2,7 +2,7 @@
 
 v1: Python, CSV, pandas/scikit-learn y FastAPI; sin base de datos ni ORM.
 Jupyter y la API son puntos de entrada al mismo código reutilizable
-(`backend/src/recoleccion/`); no dos implementaciones diferentes.
+(`backend/src/collection/`); no dos implementaciones diferentes.
 
 ## Capas y dependencias permitidas
 
@@ -37,10 +37,8 @@ Reglas:
 
 ## Casos de uso (resumen verificable)
 
-Cada flujo vive en `recoleccion.aplicacion.casos_uso`: su clase
-`CasoUso...` declara el contrato abstracto `ejecutar`, y la clase concreta
-recibe el puerto requerido y orquesta la lógica. Las funciones históricas de
-`recoleccion.aplicacion` permanecen como wrappers de compatibilidad.
+Los casos de uso se organizan bajo `collection.application.use_cases`.
+Su implementación e integración se completan en los issues correspondientes.
 
 | Caso de uso | Entrada → salida | Errores |
 |---|---|---|
@@ -62,25 +60,76 @@ de visualización (`GET /salud`, predecir, planificar) jamás entrena.
   contratos abstractos explícitos y sus implementaciones se pueden ejercitar
   directamente con fakes, sin sklearn ni NetworkX.
 
-## Evaluación reproducible
+## Evaluación reproducible (objetivo #18 y #10)
 
-- Holdout estratificado `train_test_split(test_size=0.25, stratify=y,
-  random_state=0)`; CV sobre **entrenamiento** (`cv=5` pedido, ajustado al
-  mínimo real por clase en fixtures chicos y registrado como `cv_folds_usados`).
-- Todo lo que aprende de los datos va dentro del `Pipeline`: `OneHotEncoder`
-  para `tipo_zona` siempre; `StandardScaler` solo en logística (no en árbol).
-- Métricas multiclase sobre test separado: accuracy, precisión/recall/F1 macro,
-  matriz de confusión + baseline tonto (predecir siempre la mayoría).
-- `mejor_por_cv` sale del CV-train; **no se selecciona ajustándose al test**.
-- `registro`: n de filas, partición, semilla, folds, medias CV, baseline y
-  versiones (python, sklearn, pandas). Se guarda con `guardar_registro`.
+**Estado:** #18 está implementado en el adaptador
+`collection.adapters.datasets.ml_preparation`; el `EvaluationProtocol` actual
+sigue declarando `test_size=0.25`, un contrato anterior que no representa el
+reparto de esta preparación.
+
+1. **#18:** `prepare_dataset(source, seed=0)` lee el CSV sin modificarlo,
+   valida y prepara en memoria quejas sintéticas anónimas por contenedor,
+   etiqueta construida, `X`/`y`, particiones 60/20/20 con IDs/distribuciones y
+   `ColumnTransformer` sin ajustar. En el CSV actual: 178/59/60 filas.
+2. **#10:** comparar modelos usando validación cruzada estratificada solo
+   dentro del 60 % de entrenamiento. Solicitar 5 folds; si la clase menos
+   frecuente tiene menos ejemplos, reducir los folds a ese mínimo y registrar
+   `cv_folds_pedidos` y `cv_folds_usados`. Si no son viables al menos 2 folds
+   estratificados, informar el problema. Usar `GridSearchCV` para probar una
+   grilla pequeña en esos folds internos, sin usar la validación reservada ni test.
+3. Usar el 20 % de validación para contrastar y elegir el modelo. Evaluar el
+   modelo elegido **una sola vez** con el 20 % de test; no volver a ajustar
+   decisiones mirando ese resultado.
+
+El dataset base del #9 tiene 297 tramos y 43 de prioridad alta (14.5 %).
+Con la etiqueta sintética nueva de #18 y seed 0, la distribución observada es
+129 baja (43.4 %), 93 media (31.3 %) y 75 alta (25.3 %). #10 debe recalcular
+su `cv_folds_usados` según la clase menos frecuente del train.
+
+Toda transformación que aprenda de los datos va dentro del `Pipeline` y se
+ajusta solo con el entrenamiento de cada fold. Usar `OneHotEncoder` para
+`tipo_zona` y `StandardScaler` solo cuando el modelo lo requiera; dejar una
+transformación sin ajustar disponible para CV. Reportar accuracy,
+precisión/recall/F1 macro, matriz de confusión y una línea base de mayoría.
+Registrar dataset, particiones, semilla, folds usados, resultados y versiones.
+
+### Introducción a pipelines de scikit-learn
+
+Un `Pipeline` encadena pasos de preparación y, cuando corresponda, un modelo.
+Permite ajustar esos pasos con los datos de entrenamiento y repetir la misma
+preparación al evaluar. Para este TP, el flujo previsto es:
+
+```text
+X: cantidad_contenedores, dias_desde_ultima_recoleccion,
+   tipo_zona, historico_quejas_vecinales
+  → ColumnTransformer
+      tipo_zona → OneHotEncoder(handle_unknown="ignore")
+      numéricas → pasan sin cambios
+  → clasificador (#10)
+```
+
+`ColumnTransformer` permite tratar cada columna según su tipo. El encoder
+aprende las categorías presentes durante el ajuste; si luego aparece una que
+no vio, `handle_unknown="ignore"` la representa con ceros en sus columnas
+codificadas. El escalado, si un modelo lo necesita, también va dentro del
+pipeline; no se aplica indiscriminadamente.
+
+En #18 se deja disponible el preprocesamiento **sin ajustar** y se puede usar
+una copia ajustada solo con entrenamiento para transformar validación y,
+cuando corresponda la evaluación final, test. En #10 se conecta un clasificador
+al preprocesamiento y se entrega el pipeline completo **sin ajustar** a la
+validación cruzada o a `GridSearchCV`. Así cada fold ajusta sus transformaciones
+solo con su propia parte de entrenamiento, no con todos los datos.
 
 ## La etiqueta es construida (aviso obligatorio)
 
-La prioridad se calcula con la regla v1 sobre 4 columnas; el modelo aprende
-esa regla. **Una buena métrica no demuestra utilidad operativa real.**
-Declararlo en el informe; la generalización temporal no se mide en v1
-(foto única T0).
+La etiqueta anterior del #9 y la nueva de #18 son sintéticas/construidas, no
+prioridades operativas. #18 usa sorteos anónimos enteros `[0, 3]` por
+contenedor representado con seed 0; score `2*dias + contenedores + zona_w +
+2*quejas`; `zona_w={residencial: 0, industrial: 1, comercial: 2}`; baja `<=0`,
+media `1..2`, alta `>2`. El modelo aprende esa regla: **una buena métrica no
+demuestra utilidad operativa real**. La generalización temporal no se mide con
+una única foto T0.
 
 ## Decisiones descartadas
 
