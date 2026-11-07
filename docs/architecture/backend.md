@@ -30,12 +30,17 @@ Reglas:
 | Capa | Responsabilidad | No hace |
 |---|---|---|
 | dominio (`dominio.py`) | ids estables, `Prioridad`/`TipoZona`, regla v1, invariantes, asociación inequívoca predicción↔tramo | I/O, HTTP, ML |
-| aplicación (`aplicacion.py`) | 4 casos de uso: validar/cargar dataset, comparar modelos, predecir prioridades, planificar recolección; contratos `LectorDataset`, `EvaluadorModelos`, `PredictorPrioridades`, `PlanificadorRecorrido` | I/O, HTTP, sklearn, grafos concretos |
+| aplicación (`aplicacion/`) | 4 casos de uso con contratos abstractos y ejecuciones concretas bajo `casos_uso/`; puertos `LectorDataset`, `EvaluadorModelos`, `PredictorPrioridades`, `PlanificadorRecorrido` | I/O, HTTP, sklearn, grafos concretos |
 | adaptadores (`adaptadores.py`) | `CsvLectorDataset`, `SklearnEvaluador`, `SklearnPredictor`, `PredictorReglaV1`, `NetworkxPlanificador`, `guardar_registro` | decidir políticas (solo ejecutan) |
 | composición (`composicion.py`) | inyección explícita por función (`cargar_dataset_v1`, `comparar_demos`, `predecir_con`, `planificar`) | lógica de negocio |
 | transporte (`api.py`) | validación de formas (Pydantic), traducción a dominio, códigos de error del contrato | entrenar fuera de lo pedido, lógica de negocio |
 
 ## Casos de uso (resumen verificable)
+
+Cada flujo vive en `recoleccion.aplicacion.casos_uso`: su clase
+`CasoUso...` declara el contrato abstracto `ejecutar`, y la clase concreta
+recibe el puerto requerido y orquesta la lógica. Las funciones históricas de
+`recoleccion.aplicacion` permanecen como wrappers de compatibilidad.
 
 | Caso de uso | Entrada → salida | Errores |
 |---|---|---|
@@ -53,8 +58,9 @@ de visualización (`GET /salud`, predecir, planificar) jamás entrena.
 - `EvaluadorModelos`: `SklearnEvaluador` ↔ `EvalFalso` (tests, sin sklearn).
 - `PredictorPrioridades`: `SklearnPredictor` ↔ `PredictorReglaV1` (sin entrenar) ↔ `PredictorFalso`.
 - `PlanificadorRecorrido`: `NetworkxPlanificador` ↔ `PlanificadorFalso`.
-- `Protocol` o funciones donde alcanza; las pruebas de contrato son las mismas
-  para cada par (LSP).
+- Los puertos siguen siendo `Protocol` estrechos; los casos de uso tienen
+  contratos abstractos explícitos y sus implementaciones se pueden ejercitar
+  directamente con fakes, sin sklearn ni NetworkX.
 
 ## Evaluación reproducible
 
