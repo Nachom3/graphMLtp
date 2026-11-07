@@ -27,7 +27,7 @@ Rama: `18-preparar-datos-ml` | Entrega: `feature-branch-chain` | Pruebas: `pytes
 - T3 [S2–S9, S11–S12] ruta: verificación según riesgo; estado: completado; commit: `e2960dd` y cierre de seguimiento — Verificar el comportamiento público, el CSV original y la suite; cerrar el trabajo.
 - T6 [S8, S13] ruta: delegado (context backstop); estado: completado; commit: `5cdd8e8` — Corregir la estratificación cuando un reparto viable preserva las clases y probar la regresión.
 - T7 [S8, S13] ruta: inline; estado: bloqueado (espera corrección independiente del notebook heredado); commit: `5cdd8e8` — Verificar el reparto, la suite y las limitaciones previas de CI.
-- T8 [S13] ruta: inline; estado: en curso; commit: n/a — Publicar la rama y preparar la PR autorizada.
+- T8 [S13] ruta: inline; estado: completado; PR: #25 — Publicar la rama y preparar la PR autorizada.
 
 ## Log
 
@@ -64,3 +64,7 @@ Rama: `18-preparar-datos-ml` | Entrega: `feature-branch-chain` | Pruebas: `pytes
 - L31: Review: con 17 tramos y clases alta/media/baja 9/4/4, semilla 0, el fallback sin estratificar deja media fuera de validación y baja fuera de test pese a existir un reparto viable 10/3/4. El smoke del notebook también falla en `main`, independientemente del issue #18.
 - L32: El worker observó RED en el caso de cobertura y en las regresiones de dataset vacío y semilla inválida. La corrección quedó en `5cdd8e8`; las pruebas focalizadas pasaron con 12 casos, la suite de backend con 15, y el CSV no difiere de `origin/main`. `assess` devolvió riesgo medio y `reviewDue=false`.
 - L33: El smoke del notebook sigue fuera del alcance de #18 y ya falla en `main` (`d60ea85`, run 42401443984). La segunda unidad cohesiva suma 933 líneas cambiadas respecto del primer corte y requiere una decisión de excepción de tamaño para la cadena de revisión.
+- L34: «Ya cree la pr haz la descripcion»
+- L35: Rama publicada en `origin/18-preparar-datos-ml`; PR #25 abierta por el usuario contra `main`. Descripción aplicada con `Closes #18`, plan de pruebas, estado de CI y excepción de tamaño (~1074 líneas). CI de la rama falla solo en el smoke preexistente del notebook; backend en verde.
+- L36: «Ahi arregle lo del test que fallaba, haz el rebase con main». Rebase con `--autostash` sobre `main`/`origin/main` en `39e160e` (fix del notebook). Backend 15 passed y notebook 5 passed en el worktree. La historia local quedó reescrita y diverge de `origin/18-preparar-datos-ml`; falta push con `--force-with-lease` (no autorizado aún).
+- L37: «dale hazlo» + confirmación explícita por prompt. Push con `git push --force-with-lease -u origin 18-preparar-datos-ml`: pre-push OK (backend 15 passed), rama actualizada `6ba8971..4cff3db`, PR #25 al día contra el nuevo `main`.

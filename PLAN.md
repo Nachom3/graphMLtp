@@ -45,6 +45,15 @@ con índices/IDs/distribuciones y un `ColumnTransformer` categórico sin ajustar
   seed 0): baja 129 (43.4 %), media 93 (31.3 %), alta 75 (25.3 %). La etiqueta
   sintética anterior del #9 tenía 43.4/42.1/14.5 %. Ninguna es una prioridad
   operativa medida.
+- Calibración de la regla: el curso no prescribe cómo calibrar una etiqueta
+  construida. La sesión 5 (notebook-1-métricas, celdas 28-31) enseña a calibrar
+  el umbral de *decisión del modelo* con `predict_proba` + curva
+  precision/recall según costo de FN vs FP. Los umbrales `baja<=0, media<=2`
+  son decisión de dominio para no colapsar el balance en el CSV actual
+  (297 tramos → 129/93/75) y quedan fijados en
+  `synthetic_complaints.py` (`SCORE_LOW_MAX/MEDIUM_MAX`, `SCORE_FORMULA`).
+  Si cambia la distribución base, se re-tunan acá y se registra el nuevo
+  balance; nunca desde validación/test. Métricas futuras = ajuste a la regla.
 - `X`: `cantidad_contenedores`, `dias_desde_ultima_recoleccion`, `tipo_zona`,
   `historico_quejas_vecinales`; `y`: `prioridad_recoleccion`; `tramo_id` solo
   para trazabilidad. Split por semilla 0 y estratificación cuando viable:
@@ -54,7 +63,12 @@ con índices/IDs/distribuciones y un `ColumnTransformer` categórico sin ajustar
   estándar pero cada clase puede aparecer en las tres partes, se usa una
   asignación determinista clase-a-clase. Si la cobertura es imposible, el
   reparto es no estratificado y `stratification_limitation` lo informa
-  explícitamente.
+  explícitamente. Implementación SOLID en
+  `adapters/datasets/partitioning/` (`split_sizes.py`: política de tamaños;
+  `stratified_split.py`: mecánica sklearn + fallback): `prepare_dataset` solo
+  compone load → validate → enrich → split → preprocessor → metadata.
+  Decisión: particionado como adapter (usa sklearn/pandas), no como service
+  de aplicación, para respetar "aplicación no importa sklearn/pandas".
 - #18 no entrena ni selecciona clasificadores. #10 ajusta el pipeline completo
   dentro de CV/GridSearchCV, contrasta en validación y usa test una sola vez.
   `tipo_zona` usa OneHot con `handle_unknown="ignore"`; las numéricas pasan
