@@ -136,6 +136,31 @@ media `1..2`, alta `>2`. El modelo aprende esa regla: **una buena métrica no
 demuestra utilidad operativa real**. La generalización temporal no se mide con
 una única foto T0.
 
+## Datos e inferencia del árbol (#27)
+
+Carga e inferencia usan el árbol elegido en #10; comparar/entrenar sigue
+siendo offline. `CsvDatasetReader` (stdlib `csv`, sin pandas) lee el
+directorio `v1` (`nodos.csv` + `tramos.csv`), valida sin inventar valores
+y traduce al dominio (`tipo_zona` ES->EN); las quejas se regeneran con
+semilla 0 por `tramo_id` como en #18 (la columna del CSV se recalcula y la
+etiqueta se ignora al inferir). `ValidateLoadDataset` delega al lector;
+`PredictPriorities` valida con `validate_segment_features`, exige el
+`model_id` del predictor y verifica el 1:1 con `associate_predictions`
+(orden preservado; `PREDICTION_WITHOUT_SEGMENT` si se pierde o mezcla).
+`SklearnPredictor` traduce EN->ES solo en el borde y nunca llama a `fit`.
+
+Artefacto: `model_id` `"arbol"`, archivo local no versionado
+`backend/artifacts/arbol.joblib` (joblib, justificado por ser la
+persistencia recomendada por sklearn y estar en requirements). Generación
+offline documentada en `backend/README.md` (#10 en train, elección en
+validación, test un solo uso). Carga (`pipeline_store.load_pipeline`):
+falta -> `FileNotFoundError` (no disponible, con el comando); ilegible o
+sin `predict` -> `ValueError` (incompatible). Los tests inyectan el
+pipeline o fakes (sin archivo ni filas de entrenamiento del cliente).
+
+No toca el planificador (#28 paralelo): `create_plan_route_use_case` y el
+grafo siguen intactos; los contratos abstractos no cambian.
+
 ## Decisiones descartadas
 
 - DB/ORM (incluido SQLite): CSV + pandas alcanza en v1; sin SQLAlchemy/MySQL.

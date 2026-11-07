@@ -79,6 +79,75 @@ parámetros y la distribución observada del CSV actual. En #10, el pipeline
 completo se entregará sin ajustar a CV/GridSearchCV para que cada fold ajuste
 sus transformaciones solo con su train.
 
+## Datos e inferencia del árbol (#27)
+
+Carga un directorio `v1` (`nodos.csv` + `tramos.csv`) con `CsvDatasetReader`
+(stdlib `csv`, sin pandas) y predice con el árbol de #10 ya ajustado. La
+comparación/selección es offline (#10); ningún request entrena.
+
+```bash
+python -m pytest backend/tests/test_data_inference.py -q
+python -m pytest backend/tests/ -q
+```
+
+```python
+sys.path.insert(0, str(Path("backend/src").resolve()))
+from collection import composition
+
+nodes, segments = composition.create_validate_load_dataset_use_case().execute(
+    "backend/tests/fixtures", "v1"
+)
+use_case = composition.create_predict_priorities_use_case("arbol", pipeline=pipeline_ajustado)
+predictions = use_case.execute("arbol", segments)  # 1:1 por tramo_id, en orden
+```
+
+Traducciones: `tipo_zona` ES<->EN (`residencial/comercial/industrial` <->
+`residential/commercial/industrial`) y etiqueta ES<->EN
+(`baja/media/alta` <-> `low/medium/high`) en los bordes CSV/dominio y
+predictor. Las quejas se regeneran con semilla `0` por `tramo_id`
+(`synthetic_complaints`, como #18); la columna del CSV, si existe, se
+recalcula y `prioridad_recoleccion` se ignora al inferir. Los CSV solo se
+leen. Errores: `INVALID_DATASET` (fuente/esquema/invariantes),
+`ValueError` (modelo desconocido o tramo inválido) y
+`PREDICTION_WITHOUT_SEGMENT` (salida sin 1:1).
+
+Pipeline ajustado (identificación y carga): `model_id` `"arbol"` (elegido
+en #10 por validación). Generación offline con la metodología #10
+(`prepare_dataset` seed 0 -> `build_pipeline("arbol", ...)` con
+`max_depth=None, min_samples_split=2` -> `fit` solo en train -> `joblib.dump`
+a `backend/artifacts/arbol.joblib`, no versionado):
+
+```bash
+python - <<'PY'
+from pathlib import Path
+import sys
+sys.path.insert(0, "backend/src")
+from collection.adapters.datasets.ml_preparation import prepare_dataset
+from collection.adapters.models.model_specs import build_pipeline
+from collection.adapters.models.pipeline_store import save_pipeline
+prepared = prepare_dataset("dataset/salida/tramos.csv", seed=0)
+pipe = build_pipeline("arbol", prepared.preprocessor, seed=0)
+pipe.set_params(decisiontreeclassifier__max_depth=None,
+                decisiontreeclassifier__min_samples_split=2)
+pipe.fit(prepared.X.iloc[list(prepared.partitions["train"].indices)],
+         prepared.y.iloc[list(prepared.partitions["train"].indices)])
+save_pipeline(pipe, "backend/artifacts/arbol.joblib")
+PY
+```
+
+Carga con `joblib` (formato justificado: persistencia recomendada por
+sklearn para pipelines con numpy, ya en `requirements.txt`); cualquier
+objeto con `.predict` sirve (los tests inyectan fakes sin archivo). Si el
+archivo falta: `FileNotFoundError` (modelo no disponible, con el comando
+de generación); si no se puede leer o no tiene `predict`: `ValueError`
+(modelo incompatible). La inferencia nunca llama a `fit` ni pide filas de
+entrenamiento al cliente (el viejo `filas_entrenamiento` del contrato ya no
+se usa en este camino).
+
+Limitaciones: la etiqueta es construida (regla #18 con quejas y zona
+sintéticas); las métricas de #10 miden ajuste a esa regla, no desempeño
+operativo real. Ver `docs/modelo-comparacion.md` y `PLAN.md`.
+
 ## API local
 
 ```bash
