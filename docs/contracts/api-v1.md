@@ -34,6 +34,12 @@ cualquier duda.
 
 ### `POST /modelos/comparar` (offline; no llamar desde visualización)
 
+> Este endpoint conserva el contrato API anterior y no implementa la
+> preparación offline #18. El adaptador de #18 prepara el CSV en memoria con
+> seed 0, particiones 60/20/20 y una etiqueta construida usando quejas
+> sintéticas anónimas; no cambia este endpoint ni agrega almacenamiento. El
+> `test_size` del ejemplo sigue siendo legado y no describe ese reparto.
+
 ```json
 {"filas": [{"tipo_zona": "comercial", "cantidad_contenedores": 2,
   "dias_desde_ultima_recoleccion": 4, "historico_quejas_vecinales": 2,
@@ -52,12 +58,18 @@ cualquier duda.
 
 ### `POST /predicciones:predecir`
 
+La preparación #18 expone `tipo_zona`, `cantidad_contenedores`,
+`dias_desde_ultima_recoleccion` y `historico_quejas_vecinales` sintético como
+`X`; `prioridad_recoleccion` es una etiqueta construida sintética y `tramo_id`
+solo identifica. Este ejemplo API no implica que el endpoint acepte o genere
+esas variables; la API no cambió en #18.
+
 ```json
 {"modelo_id": "arbol", "filas_entrenamiento": [...],
  "tramos": [{"tramo_id": "T0001", "nodo_origen": "N0001",
    "nodo_destino": "N0002", "longitud_m": 85.5, "tipo_zona": "residencial",
    "cantidad_contenedores": 1, "dias_desde_ultima_recoleccion": 2,
-   "historico_quejas_vecinales": 0}]}
+   "historico_quejas_vecinales": 1}]}
 ```
 
 → `{"modelo_id": "arbol", "predicciones":
@@ -80,7 +92,9 @@ cualquier duda.
 
 Por modelo: `accuracy`, `precision_macro`, `recall_macro`, `f1_macro`,
 `matriz_confusion` (filas=reales, columnas=predichas, orden baja/media/alta),
-`baseline_accuracy`. Elegir modelos por `mejor_por_cv`, nunca por test.
+`baseline_accuracy`. En el contrato anterior, `mejor_por_cv` identifica el
+modelo elegido por CV. Para #18/#10, la elección también puede usar la
+partición de validación, nunca test; revisar ese campo al adaptar el contrato.
 
 ## Errores (códigos estables)
 
