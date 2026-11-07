@@ -188,3 +188,24 @@ grafo siguen intactos; los contratos abstractos no cambian.
 - #10: entrenamiento/comparación sobre dataset final con los mismos casos
   de uso y protocolo (solo cambian configs y datos).
 - Frontend (#13): contrato en `docs/contracts/api-v1.md` (fuente de verdad v1).
+
+## Planificador NetworkX (issue #28)
+
+`PlanRoute` filtra prioridades a IDs con `container_count > 0`, conserva
+todos los tramos para circulación y delega al `NetworkxRoutePlanner` sin
+mutar entradas. `container_count == 0` nunca es destino, aunque tenga
+prioridad media/alta; queda disponible como tránsito.
+
+El adaptador usa solo NetworkX (sin Dijkstra/MST/Hierholzer propios):
+caminos mínimos ponderados sobre el grafo completo, unión de componentes
+obligatorias por árbol recubridor mínimo auxiliar (tránsito), cartero
+chino ponderado sobre la red elegida (impares + `min_weight_matching` +
+duplicación + `eulerian_circuit` sobre `MultiGraph`). Preserva IDs, claves
+paralelas y repeticiones; no usa `eulerize` (minimiza cantidad de aristas,
+no metros). Recorrido cerrado desde un inicio accesible con regreso.
+
+`Route` expone `order`, `repetitions`, `total_cost_m`, `mandatory`,
+`transit`, `repeated_distance_m`, `coverage` sin perder el orden. La
+conexión de componentes es heurística: el circuito se optimiza sobre la
+red elegida, sin promesa de óptimo global rural. Red bidireccional por
+simplificación; no valida sentidos, capacidad, horarios ni flota.
