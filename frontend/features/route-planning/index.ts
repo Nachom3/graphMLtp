@@ -20,6 +20,7 @@ export type {
   ErrorOperacion,
   EstadoOperacion,
   Escenario,
+  FilaEntrenamiento,
   ModeloId,
   Nodo,
   NodoId,

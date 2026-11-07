@@ -4,6 +4,7 @@ import type {
   CostoRecorrido,
   ErrorCodigo,
   ErrorOperacion,
+  FilaEntrenamiento,
   ModeloId,
   PasoRecorrido,
   PlanInput,
@@ -72,6 +73,16 @@ async function leer<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+function filaEntrenamiento(f: FilaEntrenamiento) {
+  return {
+    tipo_zona: f.tipoZona,
+    cantidad_contenedores: f.cantidadContenedores,
+    dias_desde_ultima_recoleccion: f.diasDesdeUltimaRecoleccion,
+    historico_quejas_vecinales: f.historicoQuejasVecinales,
+    prioridad_recoleccion: f.prioridadRecoleccion,
+  };
+}
+
 function filaTramo(t: Tramo) {
   return {
     tramo_id: t.tramoId,
@@ -121,10 +132,17 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
       modeloId: ModeloId,
       tramos: Tramo[],
       signal?: AbortSignal,
+      filas: FilaEntrenamiento[] = [],
     ): Promise<PrioridadPorTramo[]> {
       const dto = await post<PredecirDTO>(
         "/predicciones:predecir",
-        { modelo_id: modeloId, tramos: tramos.map(filaTramo) },
+        {
+          modelo_id: modeloId,
+          // api-v1 la exige para `arbol`/`logistica` (422 sin ella);
+          // `regla-v1` la ignora y acepta `[]`.
+          filas_entrenamiento: filas.map(filaEntrenamiento),
+          tramos: tramos.map(filaTramo),
+        },
         signal,
       );
       // Asociación inequívoca por tramo_id, tal cual la devuelve el backend.

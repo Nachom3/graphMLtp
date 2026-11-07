@@ -14,6 +14,7 @@ import {
   comparacionFixture,
   costoFixture,
   escenarioFixture,
+  filasEntrenamientoFixture,
   planInputFixture,
   prioridadesFixture,
   recorridoRepetidoIds,
@@ -66,10 +67,14 @@ describe("comparación: resultados ya calculados, sin HTTP", () => {
 
 describe("prioridades y recorrido con gateway fake (semántica api-v1)", () => {
   it("solicitar prioridades: selección válida → prioridades 1:1 por tramo_id", async () => {
-    const res = await solicitarPrioridades(gw(), new RequestStore(), "arbol", [
-      escenarioFixture.tramos[0],
-      escenarioFixture.tramos[1],
-    ]);
+    const res = await solicitarPrioridades(
+      gw(),
+      new RequestStore(),
+      "arbol",
+      [escenarioFixture.tramos[0], escenarioFixture.tramos[1]],
+      undefined,
+      filasEntrenamientoFixture,
+    );
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
     expect(res.datos).toEqual([

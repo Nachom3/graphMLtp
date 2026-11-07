@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
 import { crearHttpGateway } from "../infrastructure/httpGateway";
-import { escenarioFixture, planInputFixture } from "./fixtures";
+import { escenarioFixture, filasEntrenamientoFixture, planInputFixture } from "./fixtures";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -28,11 +28,27 @@ describe("httpGateway: api-v1, único lugar con fetch", () => {
     await expect(gw.salud()).resolves.toEqual({ estado: "ok", version: "v1", esquema: "v1" });
   });
 
-  it("predecir mapea predicciones 1:1 por tramo_id", async () => {
+  it("predecir envía filas_entrenamiento (api-v1 la exige para arbol/logistica)", async () => {
     mockFetchOnce((url, init) => {
       expect(url).toContain("/predicciones:predecir");
       const body = JSON.parse(String(init?.body));
       expect(body.modelo_id).toBe("arbol");
+      expect(body.filas_entrenamiento).toEqual([
+        {
+          tipo_zona: "residencial",
+          cantidad_contenedores: 1,
+          dias_desde_ultima_recoleccion: 2,
+          historico_quejas_vecinales: 0,
+          prioridad_recoleccion: "baja",
+        },
+        {
+          tipo_zona: "comercial",
+          cantidad_contenedores: 2,
+          dias_desde_ultima_recoleccion: 4,
+          historico_quejas_vecinales: 2,
+          prioridad_recoleccion: "alta",
+        },
+      ]);
       expect(body.tramos).toHaveLength(1);
       return jsonRes({
         modelo_id: "arbol",
@@ -40,7 +56,27 @@ describe("httpGateway: api-v1, único lugar con fetch", () => {
       });
     });
     const gw = crearHttpGateway("http://test");
-    const res = await gw.predecirPrioridades("arbol", [escenarioFixture.tramos[0]]);
+    const res = await gw.predecirPrioridades(
+      "arbol",
+      [escenarioFixture.tramos[0]],
+      undefined,
+      filasEntrenamientoFixture,
+    );
+    expect(res).toEqual([{ tramoId: "R-101", prioridad: "baja" }]);
+  });
+
+  it("regla-v1 funciona sin filas (arreglo vacío)", async () => {
+    mockFetchOnce((url, init) => {
+      const body = JSON.parse(String(init?.body));
+      expect(body.modelo_id).toBe("regla-v1");
+      expect(body.filas_entrenamiento).toEqual([]);
+      return jsonRes({
+        modelo_id: "regla-v1",
+        predicciones: [{ tramo_id: "R-101", prioridad: "baja" }],
+      });
+    });
+    const gw = crearHttpGateway("http://test");
+    const res = await gw.predecirPrioridades("regla-v1", [escenarioFixture.tramos[0]]);
     expect(res).toEqual([{ tramoId: "R-101", prioridad: "baja" }]);
   });
 

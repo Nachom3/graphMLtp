@@ -8,7 +8,7 @@
 | Operación | Endpoint | Respuesta que presenta |
 |---|---|---|
 | Salud/versión | `GET /salud` | `{estado, version, esquema}`; exige `v1` |
-| Prioridades | `POST /predicciones:predecir` `{modelo_id, tramos}` | `predicciones[]` 1:1 por `tramo_id` |
+| Prioridades | `POST /predicciones:predecir` `{modelo_id, filas_entrenamiento, tramos}` | `predicciones[]` 1:1 por `tramo_id` |
 | Recorrido | `POST /recorridos:planificar` `{nodos, tramos, prioridades, incluir}` | `{orden, repeticiones, costo_total_m, unidad}` → pasos con `repetido`, costo opaco |
 | Comparación | — (offline) | api-v1 pide no llamar a `/modelos/comparar` desde visualización: el frontend presenta resultados ya calculados (datos versionados) |
 
@@ -18,6 +18,8 @@
    lo presenta tal cual; nunca recalcula ni optimiza.
 2. **Selección válida:** la valida el backend (`incluir`, `422` si imposible).
    El frontend envía la selección y presenta errores tipados.
+   `arbol`/`logistica` exigen `filas_entrenamiento` (sin ellas el backend
+   devuelve `422`); `regla-v1` no las necesita y acepta `[]`.
 3. **Orden/frescura:** el frontend guarda cada respuesta con su `requestId`
    y solo aplica la vigente (test de carrera incluido).
 4. **IDs:** `tramo_id` estable (`reftramo` IDE; `T0001`/`R-101` solo aliases

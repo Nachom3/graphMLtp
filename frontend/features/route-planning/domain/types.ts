@@ -54,6 +54,20 @@ export interface PrioridadPorTramo {
   prioridad: Prioridad;
 }
 
+/**
+ * Fila de entrenamiento etiquetada (api-v1 `filas_entrenamiento`).
+ * Misma forma que las `filas` de `/modelos/comparar`: features + etiqueta.
+ * `arbol`/`logistica` la exigen (sin ella el backend devuelve 422);
+ * `regla-v1` no la necesita y acepta un arreglo vacío.
+ */
+export interface FilaEntrenamiento {
+  tipoZona: TipoZona;
+  cantidadContenedores: number;
+  diasDesdeUltimaRecoleccion: number;
+  historicoQuejasVecinales: number;
+  prioridadRecoleccion: Prioridad;
+}
+
 /** Un paso del recorrido; el mismo tramo puede aparecer varias veces. */
 export interface PasoRecorrido {
   orden: number; // 0-based, conserva el orden devuelto

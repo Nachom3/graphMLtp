@@ -4,6 +4,7 @@ import type {
   ErrorOperacion,
   Escenario,
   EstadoOperacion,
+  FilaEntrenamiento,
   ModeloId,
   PasoRecorrido,
   PlanInput,
@@ -22,6 +23,7 @@ export interface ApiGateway {
     modeloId: ModeloId,
     tramos: Tramo[],
     signal?: AbortSignal,
+    filas?: FilaEntrenamiento[],
   ): Promise<PrioridadPorTramo[]>;
   planificarRecorrido(
     input: PlanInput,
@@ -135,6 +137,7 @@ export function solicitarPrioridades(
   modeloId: ModeloId,
   tramos: Tramo[],
   signal?: AbortSignal,
+  filas: FilaEntrenamiento[] = [],
 ): Promise<EstadoOperacion<PrioridadPorTramo[]>> {
   if (tramos.length === 0) {
     return Promise.resolve({
@@ -142,7 +145,7 @@ export function solicitarPrioridades(
       motivo: "selección vacía",
     } as EstadoOperacion<PrioridadPorTramo[]>);
   }
-  return ejecutar(store, gw.predecirPrioridades(modeloId, tramos, signal), (ps) =>
+  return ejecutar(store, gw.predecirPrioridades(modeloId, tramos, signal, filas), (ps) =>
     ps.length === 0 ? "sin prioridades" : null,
   );
 }

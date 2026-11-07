@@ -59,6 +59,8 @@ export class FakeGateway implements ApiGateway {
     tramos: Tramo[],
     signal?: AbortSignal,
   ): Promise<PrioridadPorTramo[]> {
+    // El fake no necesita filas de entrenamiento: responde con prioridades
+    // controladas. La forma real del cuerpo se verifica en httpGateway.test.
     await this.paso(signal);
     const soportados = this.opciones.modelosSoportados ?? ["arbol", "logistica", "regla-v1"];
     if (!soportados.includes(modeloId)) {

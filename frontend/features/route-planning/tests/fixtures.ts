@@ -1,4 +1,4 @@
-import type { ComparacionModelos, CostoRecorrido, Escenario, PlanInput, Prioridad } from "../domain/types";
+import type { ComparacionModelos, CostoRecorrido, Escenario, FilaEntrenamiento, PlanInput, Prioridad } from "../domain/types";
 
 /** IDs de fixture (alias ilustrativos; reales: reftramo IDE según api-v1). */
 export const escenarioFixture: Escenario = {
@@ -51,6 +51,27 @@ export const prioridadesFixture: Record<string, Prioridad> = {
   "R-102": "alta",
   "R-103": "media",
 };
+
+/**
+ * Filas de entrenamiento (api-v1 `filas_entrenamiento`): features + etiqueta.
+ * `arbol`/`logistica` las exigen; `regla-v1` acepta `[]`.
+ */
+export const filasEntrenamientoFixture: FilaEntrenamiento[] = [
+  {
+    tipoZona: "residencial",
+    cantidadContenedores: 1,
+    diasDesdeUltimaRecoleccion: 2,
+    historicoQuejasVecinales: 0,
+    prioridadRecoleccion: "baja",
+  },
+  {
+    tipoZona: "comercial",
+    cantidadContenedores: 2,
+    diasDesdeUltimaRecoleccion: 4,
+    historicoQuejasVecinales: 2,
+    prioridadRecoleccion: "alta",
+  },
+];
 
 /** Entrada de planificación api-v1: grafo + prioridades + incluir. */
 export const planInputFixture: PlanInput = {

@@ -18,8 +18,8 @@ export function useOperacion<T, A extends unknown[]>(
     ...args: [...A, AbortSignal?]
   ) => Promise<EstadoOperacion<T>>,
 ): [EstadoOperacion<T> | { estado: "ociosa" }, (...args: A) => Promise<void>] {
-  const storeRef = useRef<Store | null>(null);
-  if (!storeRef.current) storeRef.current = new Store();
+  // Store estable sin acceder a refs durante el render (react-hooks/refs).
+  const [store] = useState(() => new Store());
   const abortRef = useRef<AbortController | null>(null);
   const [estado, setEstado] = useState<EstadoOperacion<T> | { estado: "ociosa" }>({
     estado: "ociosa",
@@ -30,10 +30,10 @@ export function useOperacion<T, A extends unknown[]>(
       const ctrl = new AbortController();
       abortRef.current = ctrl;
       setEstado({ estado: "carga", requestId: -1 });
-      const res = await caso(gateway, storeRef.current!, ...args, ctrl.signal);
+      const res = await caso(gateway, store, ...args, ctrl.signal);
       setEstado(res);
     },
-    [gateway, caso],
+    [gateway, caso, store],
   );
   return useMemo(() => [estado, correr] as const, [estado, correr]);
 }
