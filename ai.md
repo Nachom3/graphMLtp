@@ -13,4 +13,8 @@ Aca anotamos qué hicimos con IA y qué hicimos sin IA, simple.
 
 ## Lo hicimos sin IA
 
-- (todavía nada, ir agregando)
+- Definir modelos en base a las comparaciones
+- Definir la arquitectura del proyecto y tecnologias
+- Entender las liberias y tecnicas de ML a utilizar
+- Buscar el dataset
+
