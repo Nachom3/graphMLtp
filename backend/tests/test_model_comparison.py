@@ -116,6 +116,19 @@ def test_same_methodology_both_models_choice_justified_and_csv_untouched():
     assert hashlib.sha256(SOURCE.read_bytes()).digest() == before
 
 
+def test_non_stratified_protocol_is_honored_instead_of_silently_stratified():
+    prepared = prepare_dataset(SOURCE, seed=0)
+    evaluator = SklearnEvaluator()
+    comparison, _rows = evaluator.evaluate_preparation(
+        prepared, CONFIGS, EvaluationProtocol(stratified=False)
+    )
+    assert comparison.record["cv_strategy"].startswith("KFold")
+    assert comparison.record["cv_folds_pedidos"] == 5
+    assert comparison.record["cv_folds_usados"] == 5
+    assert {metric.model_id for metric in comparison.metrics} == set(CONFIGS)
+    assert not hasattr(prepared.preprocessor, "transformers_")
+
+
 def test_unfitted_pipelines_handle_unseen_zones_without_global_prefit():
     prepared = prepare_dataset(SOURCE, seed=0)
     for model_id in CONFIGS:

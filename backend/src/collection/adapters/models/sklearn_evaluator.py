@@ -45,7 +45,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
 )
-from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_validate
+from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold, cross_validate
 from sklearn.pipeline import make_pipeline
 
 from ...application.models.evaluation_protocol import EvaluationProtocol
@@ -87,6 +87,20 @@ def resolve_cv_folds(y_train: list[str] | pd.Series, requested: int) -> tuple[in
         raise ValueError(
             "stratified CV infeasible: the least-frequent train class has "
             f"{least} example(s); at least 2 stratified folds are required "
+            f"(requested {requested})"
+        )
+    return int(requested), int(used)
+
+
+def resolve_plain_folds(n_train: int, requested: int) -> tuple[int, int]:
+    """Return (pedidos, usados) for non-stratified KFold inside train."""
+    if n_train <= 0:
+        raise ValueError("train split is empty; CV is infeasible")
+    used = min(int(requested), int(n_train))
+    if used < 2:
+        raise ValueError(
+            "CV infeasible: train has "
+            f"{n_train} example(s); at least 2 folds are required "
             f"(requested {requested})"
         )
     return int(requested), int(used)
@@ -166,8 +180,24 @@ class SklearnEvaluator:
             raise ValueError("train and validation partitions must be non-empty")
 
         requested = protocol.requested_folds()
-        pedidos, usados = resolve_cv_folds(y_train.tolist(), requested)
-        cv = StratifiedKFold(n_splits=usados, shuffle=True, random_state=protocol.seed)
+        if protocol.stratified:
+            pedidos, usados = resolve_cv_folds(y_train.tolist(), requested)
+            cv_strategy = "StratifiedKFold(shuffle=True) dentro de train"
+        else:
+            pedidos, usados = resolve_plain_folds(len(X_train), requested)
+            cv_strategy = (
+                "KFold(shuffle=True) dentro de train "
+                "(stratified=False pedido explicito)"
+            )
+
+        def _make_cv() -> Any:
+            if protocol.stratified:
+                return StratifiedKFold(
+                    n_splits=usados, shuffle=True, random_state=protocol.seed
+                )
+            return KFold(n_splits=usados, shuffle=True, random_state=protocol.seed)
+
+        cv = _make_cv()
 
         preprocessor = self._preprocessor_from_rows(frame)
         metrics: list[ModelMetrics] = []
@@ -185,9 +215,7 @@ class SklearnEvaluator:
             search = GridSearchCV(
                 clone(pipeline),
                 grid,
-                cv=StratifiedKFold(
-                    n_splits=usados, shuffle=True, random_state=protocol.seed
-                ),
+                cv=_make_cv(),
                 scoring="f1_macro",
                 refit=True,
             )
@@ -238,6 +266,7 @@ class SklearnEvaluator:
             best_by_validation=best_by_validation,
             best_by_cv=best_by_cv,
             preprocessor_fitted=self._preprocessor_was_fitted(preprocessor),
+            cv_strategy=cv_strategy,
         )
         return ModelComparison(
             metrics=tuple(metrics),
@@ -407,6 +436,7 @@ class SklearnEvaluator:
         best_by_validation: str,
         best_by_cv: str,
         preprocessor_fitted: bool,
+        cv_strategy: str,
     ) -> dict[str, Any]:
         sizes = {
             name: int((frame["_partition"] == name).sum()) for name in PARTITIONS
@@ -430,7 +460,7 @@ class SklearnEvaluator:
             },
             "cv_folds_pedidos": pedidos,
             "cv_folds_usados": usados,
-            "cv_strategy": "StratifiedKFold(shuffle=True) dentro de train",
+            "cv_strategy": cv_strategy,
             "configs": list(configs),
             "grids": {model: dict(param_grid_for(model)) for model in configs},
             "search": search_details,
