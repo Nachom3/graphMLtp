@@ -1,90 +1,47 @@
-# Arquitectura del frontend (issue #13)
+# Arquitectura del frontend
 
-Base de pruebas independiente del backend. Sin UI completa en este issue:
-lógica + tests; `react-leaflet` instalado pero aislado tras un view-model
-comprobable sin mapa real.
+El frontend se organiza por componentes y features. `app/` conserva únicamente la responsabilidad especial de Next.js; el resto del código vive en componentes compartidos o junto a la feature que lo necesita. No hay capas globales que obliguen a cada cambio a atravesar una estructura ajena al dominio.
 
-## Capas y dependencias permitidas
+## Mapa rápido
 
 ```text
-presentación (React) → aplicación (casos de uso) → gateway (contrato API)
-mapa (Leaflet) ← view-model puro ← dominio/presentación
+frontend/
+  app/                              rutas y composición Next.js
+  components/                       piezas genéricas reutilizables
+  features/route-planning/          planificación de recorridos
+  public/                            recursos servidos como estáticos
 ```
 
-| Capa | Contenido | Puede importar | No puede importar |
-|---|---|---|---|
-| `domain` (tipos y reglas de presentación) | `frontend/src/domain/*`: prioridades, tramos, escenario, comparación, recorrido, costo opaco, estados, view-model del mapa | nada (solo TS puro) | React, HTTP, Leaflet |
-| `application` (casos de uso) | `frontend/src/application/*`: 5 casos de uso, guarda de `requestId`, fuente de verdad de solicitudes | `domain`, contrato `gateway` | React, `fetch`, Leaflet |
-| `infrastructure` (adaptadores) | `frontend/src/infrastructure/*`: `httpGateway` (fetch + DTO→dominio + errores), `fakeGateway` (memoria con latencia/fallos controlables) | `domain`, contrato | componentes React |
-| `presentation` | `frontend/src/presentation/*`: hooks y componentes de estados (carga/vacío/éxito/error), leyenda no solo color | `domain`, `application` | Leaflet directo |
-| `map` (frontera cliente) | `frontend/src/map/*`: `MapView` (client-only, `dynamic` + `ssr:false`) alimentado por view-model puro | view-model | casos de uso directo |
+- `app/` contiene páginas, layouts y configuración de pruebas propias de las rutas.
+- `components/` contiene componentes compartidos independientes de features. Cada componente tiene su propio directorio y `index.ts`; las primitivas shadcn `Alert`, `Badge` y `Skeleton` viven en `components/ui/`.
+- `features/<nombre>/` contiene la lógica y presentación de una capacidad. Cada feature publica su API mediante `index.ts`; la aplicación importa desde esa entrada, no desde carpetas internas.
+- `public/` es la ubicación reservada por Next.js para recursos estáticos. No se agregan ejemplos artificiales para llenar el directorio.
+- `@/` resuelve desde la raíz `frontend/`. `components.json` configura shadcn para Next.js, React 19 y Tailwind CSS v4; los tokens de tema están en `app/globals.css`.
 
-Reglas:
+## Dependencias de una feature
 
-- Casos de uso independientes de componentes React (testeables en Node/Vitest).
-- Nada de `fetch` disperso: todo pasa por el `ApiGateway` (pequeño, sustituible).
-- Sin backend adicional en Next.js (sin API routes), sin store global.
-  Fuente de verdad: un `RequestStore` mínimo por solicitud vigente
-  (`requestId` monótono + `AbortController`); las respuestas viejas no
-  sobrescriben la selección vigente (la semántica de orden/versiones la
-  define el backend, ver `docs/contracts/README.md`).
-- Costo y validación de selecciones: los define el backend; el frontend
-  solo presenta el `costo` opaco y los errores tipados (sin recalcular ML
-  ni optimización).
+La feature `route-planning` usa subestructura solo donde separa responsabilidades reales:
 
-## Principios aplicados
+| Área | Responsabilidad | Dependencias principales |
+|---|---|---|
+| `domain/` | Tipos del escenario, prioridades, recorrido y reglas puras | TypeScript sin React, Next ni HTTP |
+| `application/` | Casos de uso, estado de solicitudes y contrato `ApiGateway` | Dominio y su puerto |
+| `infrastructure/` | Adaptadores HTTP y fake; serialización y traducción de errores | Contrato de aplicación y dominio |
+| `components/` | Mapa, hook de operación, leyenda y resumen propios de la feature | API interna de la feature y React/Next cuando corresponde |
+| `index.ts` | Contrato público para el resto de la aplicación | Reexporta solo la superficie ofrecida |
 
-- **SRP:** tipos (qué se muestra), casos de uso (qué se pide), gateway
-  (cómo se pide), presentación (cómo se ve), mapa (dónde se ve).
-- **DIP/ISP:** la aplicación depende del contrato pequeño `ApiGateway`;
-  ningún consumidor conoce `fetch`. Contratos por rol, no un cliente dios.
-- **Composición:** construcción e inyección explícita (el hook recibe el
-  gateway; los tests inyectan el fake).
-- Funciones/tipos por defecto; clases solo donde encapsulan estado útil
-  (`FakeGateway`, `RequestStore`). Sin factories abstractas ni DI framework.
+Los componentes compartidos no importan de `features/`. Cada componente React reutilizable o propio de una feature tiene su directorio y `index.ts`; esto incluye `map-view-client/MapViewCliente`, cuya entrada es privada y no se reexporta desde la API de la feature. Las páginas de `app/` componen interfaces mediante APIs públicas; no acceden a implementaciones internas de una feature. La lógica de dominio no depende de React, Next.js, HTTP o Leaflet.
 
-## Casos de uso (5)
+## Contratos y comportamiento preservado
 
-| Caso de uso | Resultado esperado |
-|---|---|
-| Cargar escenario | grafo, datos y metadatos consistentes |
-| Consultar comparación de modelos | resultados ya calculados + configuración |
-| Solicitar prioridades | selección válida → prioridades por tramo |
-| Solicitar recorrido | secuencia + repeticiones + costo del backend |
-| Explorar resultados | selección tramo/paso ↔ mapa + resumen textual |
-
-Cada uno define estados: carga, vacío, éxito, error. Accesibilidad: la
-prioridad nunca se comunica solo con color (leyenda con etiqueta + patrón).
-
-## Frontera Leaflet / Next.js
-
-- Leaflet solo corre en cliente: `next/dynamic(ssr:false)` + `MapView`.
-- El mapa nunca recibe entidades del backend directamente: recibe el
-  `MapViewModel` (marcadores, polilíneas por tramo, paso actual), función
-  pura `toMapViewModel(resultado)` testeable sin JSDOM ni Leaflet.
-- `react-leaflet` + `leaflet` instalados desde este issue; sin página demo
-  (acordado: sin UI). El smoke Playwright verifica que la home carga y que
-  los componentes de estado renderizan sin mapa real.
-- Tiles: en tests, ninguna baldosa externa (jsdom + fake; Playwright
-  contra `page.tsx` por defecto sin teselas).
+- `ApiGateway` es un puerto pequeño; `crearHttpGateway` contiene las llamadas HTTP y el mapeo de errores api-v1. `FakeGateway` permite pruebas controladas.
+- Los pasos conservan el orden y las apariciones repetidas devueltas por el backend. Las prioridades mantienen su asociación por `tramo_id`.
+- El costo del recorrido es opaco y se presenta tal como lo informa el backend; el frontend no lo recalcula.
+- El view-model del mapa es puro. Leaflet se carga solo en cliente y recibe el modelo de vista, no entidades del backend.
+- Los componentes compartidos y específicos tienen entradas locales `index.ts`; la feature publica su API desde `features/route-planning/index.ts`. `EstadoVista` compone la primitiva shadcn `Alert` sin cambiar sus mensajes en español ni el rol accesible `status`. La utilidad estándar `cn` está en `lib/utils.ts` y combina `clsx` con `tailwind-merge`.
 
 ## Pruebas
 
-- **Vitest (unidad, <10s, sin red/modelos/teselas):** transformaciones,
-  gateway fake, `requestId` (respuesta tardía no reemplaza), fixture con
-  tramo repetido que conserva orden y duplicados, costo opaco sin
-  recalcular, tipos coherentes con el contrato.
-- **Testing Library:** componentes de estados con datos controlados
-  (carga, vacío, parámetros inválidos, fallo de red, recorrido imposible).
-- **Playwright (smoke separado):** la app levanta y la home responde;
-  no abre mapa real en este issue.
+Cada feature o zona con pruebas tiene su carpeta `tests/`: `components/tests/` valida utilidades compartidas; `features/route-planning/tests/` concentra pruebas de dominio, casos de uso, adaptadores y componentes de la feature junto a sus fixtures; `app/tests/` contiene la prueba de arquitectura, el setup de Vitest y `e2e/` con los smoke tests de rutas. `app/tests/architecture.test.ts` verifica el layout público, sus entradas y las carpetas `tests/`. Vitest no requiere backend, modelos ni teselas externas. Playwright requiere que su navegador esté instalado en la ubicación elegida por el entorno.
 
-## Lo que NO es este issue
-
-- Sin página de recorrido completa ni formularios finales (trabajo posterior).
-- Sin contrato definitivo: `docs/contracts/README.md` es stub
-  frontend-only; el contrato canónico lo define la sesión del #12
-  (backend). Tipos TS derivan de ese stub + IDs del dataset (#8, leído
-  por referencia sin mergear).
-- Sin shadcn CLI completo: base compatible (utils `cn` + componentes
-  mínimos estilo shadcn); el sistema de diseño completo es posterior.
+Comandos habituales desde `frontend/`: `npm test`, `npm run build`, `npm run lint` y `npm run test:e2e`.

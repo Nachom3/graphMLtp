@@ -1,0 +1,1 @@
+export { LeyendaPrioridades } from "./PriorityLegend";

@@ -1,43 +1,50 @@
-# Frontend — base issue #13 (sin UI completa)
+# Frontend — base issue #13
 
-Stack: Next.js + TypeScript + Tailwind + componentes mínimos estilo
-shadcn + Leaflet aislado (`react-leaflet` instalado, frontera cliente vía
-view-model puro). Sin API routes, sin store global.
+Frontend de Next.js con TypeScript, Tailwind y una frontera de mapa Leaflet aislada. La arquitectura organiza el código por componentes reutilizables y features; todavía no incluye una página de producto ni formularios finales.
 
 ## Estructura
 
 ```text
-frontend/src/
-  domain/          tipos y reglas de presentación (puros)
-  application/     casos de uso + contrato ApiGateway + RequestStore
-  infrastructure/  httpGateway (fetch) + fakeGateway (memoria)
-  presentation/    hook useOperacion + vistas de estados + leyenda/resumen
-  map/             MapView (dynamic ssr:false) + mapViewModel puro
-frontend/tests/
-  fixtures.ts      escenario piloto + recorrido con tramo repetido
-  dominio.test.ts, usecases.test.ts, httpGateway.test.ts,
-  mapViewModel.test.ts, estados.test.tsx
-  e2e/smoke.spec.ts  smoke Playwright separado (home carga)
+frontend/
+  app/                              Next App Router, composición y pruebas de rutas
+  components/                       primitivas compartidas, independientes de features
+    operation-status/               EstadoVista compuesta con Alert + index.ts
+    ui/alert/                        Alert, AlertDescription, AlertTitle + index.ts
+    ui/badge/                        Badge + index.ts
+    ui/skeleton/                     Skeleton + index.ts
+  components/tests/                  pruebas de primitivas/utilidades compartidas
+  lib/utils.ts                       cn de shadcn (clsx + tailwind-merge)
+  components.json                    configuración shadcn para Next.js y Tailwind v4
+  features/route-planning/          feature completa de planificación
+    domain/                          modelos y reglas puras
+    application/                     casos de uso + puerto ApiGateway
+    infrastructure/                  adaptadores HTTP y fake
+    components/                      presentación propia de la feature
+      map-view/                      MapView + index.ts + view-model puro
+      map-view-client/               MapViewCliente + index.ts (interno)
+      priority-legend/               LeyendaPrioridades + index.ts
+      route-summary/                 ResumenRecorrido + index.ts
+      use-operation/                 hook de operación + index.ts
+    tests/                           pruebas de la feature + fixtures compartidos
+    index.ts                         API pública de la feature
+  public/                            recursos estáticos de Next.js
 ```
 
-## Comandos (desde `frontend/`)
+Cada componente reutilizable o propio de una feature tiene su directorio y `index.ts`. Las rutas permanecen según la convención de Next.js. El alias `@/` apunta a la raíz de `frontend/`. Los componentes compartidos usan primitivas shadcn; `EstadoVista` conserva sus mensajes en español y el rol accesible `status`.
+
+## Desarrollo y pruebas
+
+Desde `frontend/`:
 
 ```bash
-npm install
-npm run test        # Vitest unitario: sin red, sin teselas, sin modelos (<10s)
-npm run test:e2e    # Playwright smoke (requiere browsers instalados)
-npm run dev         # Next dev en http://localhost:3000
+npm ci
+npm test
 npm run build
+npm run lint
+npm run test:e2e  # necesita el navegador de Playwright disponible
+npm run dev
 ```
 
-Docs: `docs/architecture/frontend.md` (capas y frontera Leaflet),
-`docs/contracts/README.md` (consume api-v1 del #12; comparación offline).
+Vitest ejecuta las pruebas de cada `tests/`: `components/tests/` valida las utilidades compartidas y `features/route-planning/tests/` valida la feature. El smoke Playwright vive en `app/tests/e2e/`. La prueba de arquitectura está en `app/tests/architecture.test.ts`.
 
-## Limitaciones conocidas (base #13)
-
-- Sin página de recorrido ni formularios (trabajo posterior).
-- `next build` (Turbopack) falla en este sandbox (sale 135 sin salida);
-  `next dev`, `tsc` y la suite Vitest pasan. Verificar build en CI/otra máquina.
-- El smoke Playwright está configurado y separado, pero en este sandbox
-  el loopback devuelve `ERR_CONNECTION_RESET`; correr `npm run test:e2e`
-  fuera del sandbox.
+Detalles de límites y dependencias: [`../docs/architecture/frontend.md`](../docs/architecture/frontend.md). Contrato consumido por el adaptador: [`../docs/contracts/README.md`](../docs/contracts/README.md).
