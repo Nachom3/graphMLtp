@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Pre-push hook: corre lo mismo que CI (.github/workflows/ci.yml).
+# Instalación: ./scripts/install-hooks.sh
+set -euo pipefail
+
+echo "pre-push: backend tests..."
+python -m pytest -c backend/pytest.ini backend/tests/ -q
+
+echo "pre-push: notebook smoke..."
+python -m pytest --nbval-lax \
+  notebooks/12_arquitectura_backend.ipynb -q
+
+echo "pre-push: OK"
