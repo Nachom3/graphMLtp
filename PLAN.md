@@ -74,7 +74,7 @@ con índices/IDs/distribuciones y un `ColumnTransformer` categórico sin ajustar
   `tipo_zona` usa OneHot con `handle_unknown="ignore"`; las numéricas pasan
   intactas. Dependencias ya declaradas en `backend/requirements.txt`.
 
-## Modelo (issue #10, pendiente)
+## Modelo (issue #10, implementado en esta rama)
 
 Comparar `DecisionTreeClassifier` (sesión 4) contra al menos otro del curso
 (`LogisticRegression`, `KNeighborsClassifier` o `SVC`). Sobre el **60 % de
@@ -91,6 +91,11 @@ van dentro del pipeline de cada fold. Usar `StandardScaler` solo cuando el
 modelo lo requiera. Reportar métricas multiclase y una línea base, sin elegir
 el modelo con los resultados de test. Referencias: sesión 5, diapositivas 24,
 30–32 y `clases/sesion-05-evaluacion-de-modelos/notebook-2-validacion-cruzada.ipynb`.
+
+Resultado en el CSV actual (seed 0): elegido `arbol` por validación
+(F1 1.0 vs 0.9268); test un solo uso acc/F1 1.0. Informe completo:
+`docs/modelo-comparacion.md`; reproducible con `scripts/train_compare.py` y
+`notebooks/10_entrenamiento_modelos.ipynb`.
 
 Predicciones → selección de tramos (p. ej. media o alta) → Hierholzer; si no
 es euleriano, cartero chino (Dijkstra + emparejamiento mínimo).
@@ -116,5 +121,5 @@ notebook en `notebooks/12_arquitectura_backend.ipynb`. Ejecución: ver
 
 ## Orden de trabajo pendiente
 
-1. #18 Revisar y entregar la preparación de datos para ML en el backend.
-2. #10 Entrenar, comparar y conectar predicciones → grafo → API → Leaflet.
+1. Revisar y mergear esta rama (#10).
+2. Conectar predicciones → grafo → API → Leaflet.
