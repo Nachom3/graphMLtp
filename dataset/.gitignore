@@ -1,0 +1,8 @@
+# Binarios grandes: se descargan, no se versionan.
+*.zip
+*.shp
+*.shx
+*.dbf
+*.prj
+*.cpg
+*.shp.xml
