@@ -240,11 +240,17 @@ def _geodetic_length_m(ls_utm: LineString) -> float:
     return _GEOD.geometry_length(wgs84)
 
 
-def _tramo_id(reftramo: int, frag_idx: int) -> str:
-    """tramo_id derivado del reftramo estable del IDE; sufijo si se dividio."""
-    if frag_idx == 0:
+def _tramo_id(reftramo: int, occ: int) -> str:
+    """tramo_id derivado del reftramo estable del IDE; sufijo si se dividio.
+
+    occ es el indice de ocurrencia 0-based del reftramo entre todos los
+    sub-segmentos (no el frag_idx intra-fragmento): un mismo reftramo puede
+    producir varios fragmentos disjuntos al recortar por bbox (entra y sale
+    del recorte), y cada fragmento se parte a su vez en node_and_split.
+    Sin contador global habria duplicados (visto en el recorte medio)."""
+    if occ == 0:
         return str(reftramo)
-    return f"{reftramo}-{frag_idx + 1}"
+    return f"{reftramo}-{occ + 1}"
 
 
 def build_graph(sub_segments: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -297,12 +303,15 @@ def build_graph(sub_segments: list[dict]) -> tuple[list[dict], list[dict]]:
         )
 
     tramos = []
+    occ_por_reftramo: dict[int, int] = {}
     for n0, n1, s in raw_edges:
         if n0 not in keep_nodes or n1 not in keep_nodes:
             continue
+        occ = occ_por_reftramo.get(s["reftramo"], 0)
+        occ_por_reftramo[s["reftramo"]] = occ + 1
         tramos.append(
             {
-                "tramo_id": _tramo_id(s["reftramo"], s["frag_idx"]),
+                "tramo_id": _tramo_id(s["reftramo"], occ),
                 "nodo_origen": f"N{new_id[n0] + 1:04d}",
                 "nodo_destino": f"N{new_id[n1] + 1:04d}",
                 "longitud_m": round(_geodetic_length_m(s["utm"]), 2),
