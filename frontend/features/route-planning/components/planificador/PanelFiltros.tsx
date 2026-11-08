@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { LeyendaPrioridades } from "../priority-legend";
 import type { Node, Priority } from "../../domain/types";
-import { MAX_TRAMOS_CALCULO, PRIORITIES } from "./constantes";
+import { PRIORITIES } from "./constantes";
 
 interface PanelFiltrosProps {
   include: Priority[];
@@ -53,9 +53,7 @@ export function PanelFiltros({
           ? "Elegí al menos una prioridad a incluir."
           : !inicioVisible
             ? "No hay nodo de inicio en el área visible."
-            : areaTramos !== null && areaTramos > MAX_TRAMOS_CALCULO
-              ? `Acercá el mapa: hay ${areaTramos} tramos (máx. ${MAX_TRAMOS_CALCULO}).`
-              : "Ajustá el área o las prioridades para poder simular."
+            : "Ajustá el área o las prioridades para poder simular."
     : null;
 
   return (
@@ -72,10 +70,7 @@ export function PanelFiltros({
       </p>
       <p className="mt-2 text-sm text-zinc-700">
         {areaTramos !== null
-          ? `${areaTramos} tramos visibles. ` +
-            (areaTramos > MAX_TRAMOS_CALCULO
-              ? `Acercá el mapa: el máximo para calcular es ${MAX_TRAMOS_CALCULO}.`
-              : `Listo para simular (límite ${MAX_TRAMOS_CALCULO}).`)
+          ? `${areaTramos} tramos visibles. Listo para simular.`
           : "Esperando el área visible del mapa."}
       </p>
       <fieldset className="mt-4">

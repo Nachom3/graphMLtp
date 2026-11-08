@@ -77,10 +77,14 @@ describe("cálculo SSR del recorrido", () => {
     }
   });
 
-  it("rechaza áreas de más de 300 tramos y sin geometría real", async () => {
+  it("ya no topa el área en 300 tramos: pide el bbox y el máximo lo manda el frontend", async () => {
     const extra = Array.from({ length: 300 }, (_, i) => ({ ...escenario.segments[0], segmentId: `extra${i}` }));
-    const grande = gateway({ ...escenario, segments: [...escenario.segments, ...extra] });
-    expect(await calcularRecorridoSSRConGateway(params(), grande)).toMatchObject({ ok: false, error: expect.stringMatching(/máximo de 300/) });
+    const gw = gateway({ ...escenario, segments: [...escenario.segments, ...extra] });
+    const resultado = await calcularRecorridoSSRConGateway(params(), gw);
+    expect(gw.getScenario).toHaveBeenCalledWith({
+      bbox: { sur: -34.92, norte: -34.9, oeste: -56.17, este: -56.14 },
+    });
+    expect(resultado).toMatchObject({ ok: false, error: expect.stringMatching(/Faltan predicciones/) });
     const sinGeometria = gateway({ ...escenario, segments: [{ ...escenario.segments[0], geometry: undefined }] });
     expect(await calcularRecorridoSSRConGateway(params(), sinGeometria)).toMatchObject({ ok: false, error: expect.stringMatching(/sin geometría.*inside.*A.*B/) });
   });

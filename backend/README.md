@@ -156,7 +156,13 @@ La API usa por defecto `dataset/salida-montevideo/`, con nodos, tramos y
 `geometrias.geojson` generados con `python scripts/build_dataset.py --montevideo`.
 La variable `COLLECTION_SCENARIO_SOURCE` permite apuntar explícitamente a otro
 directorio compatible; no se sustituye por un fixture si faltan los datos.
-`GET /scenario` devuelve las polilíneas IDE WGS84 `[lon, lat]` por `segment_id`
+La configuración vive en `src/collection/config.py`: además de la fuente,
+`COLLECTION_SCENARIO_DEFAULT_LIMIT` (tope cuando el cliente no manda `limit`;
+vacío = dataset completo) y `COLLECTION_SCENARIO_MAX_LIMIT` (tope de seguridad,
+50000 por defecto).
+`GET /scenario` acepta `sur/norte/oeste/este/limit` opcionales para cargar solo
+una parte (misma validación que `GET /containers`; responde `total/limit/truncated`);
+sin params devuelve todo. Devuelve las polilíneas IDE WGS84 `[lon, lat]` por `segment_id`
 y responde `SCENARIO_UNAVAILABLE` si faltan o no coinciden con los tramos.
 El modelo predeterminado es `backend/artifacts/arbol-montevideo.joblib`; se genera
 con `python scripts/generate_arbol_artifact.py` sobre el CSV de ciudad. Las

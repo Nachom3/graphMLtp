@@ -33,6 +33,7 @@ from .adapters.models.sklearn_predictor import SklearnPredictor
 from .application.use_cases.plan_route.use_case import PlanRoute
 from .application.use_cases.predict_priorities.use_case import PredictPriorities
 from .application.use_cases.validate_load_dataset.use_case import ValidateLoadDataset
+from .config import scenario_source as configured_scenario_source
 
 
 def create_validate_load_dataset_use_case(
@@ -85,10 +86,6 @@ def pilot_scenario_source() -> Path:
     """Return the full-city dataset, unless explicitly configured otherwise.
 
     Never fall back silently to the small test fixture or the pilot area.
+    Source of truth: `collection.config.scenario_source()`.
     """
-    import os
-
-    configured = os.environ.get("COLLECTION_SCENARIO_SOURCE")
-    if configured:
-        return Path(configured).expanduser().resolve()
-    return Path(__file__).resolve().parents[3] / "dataset" / "salida-montevideo"
+    return configured_scenario_source()

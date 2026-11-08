@@ -45,6 +45,9 @@ export interface Scenario {
   version: string;
   nodes: Node[];
   segments: Segment[];
+  /** Recorte del servidor: candidatos en el área y si hubo truncado. */
+  total?: number;
+  truncated?: boolean;
 }
 
 /** Backend: ModelMetrics. */

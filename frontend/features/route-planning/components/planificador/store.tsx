@@ -27,7 +27,7 @@ import type {
 import {
   BARRIO_DEFAULT,
   errorText,
-  MAX_TRAMOS_CALCULO,
+  LIMITE_TRAMOS_ESCENARIO,
   MAX_TRAMOS_PREDICCION,
   PRIORITIES,
   TRAMOS_POR_PAGINA,
@@ -142,7 +142,10 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
   useEffect(() => {
     let active = true;
     async function load() {
-      const loaded = await obtenerEscenario(gateway, new RequestStore());
+      const loaded = await obtenerEscenario(gateway, new RequestStore(), undefined, {
+        bbox: BARRIO_DEFAULT,
+        limit: LIMITE_TRAMOS_ESCENARIO,
+      });
       if (!active) return;
       if (loaded.estado !== "exito") {
         setLoading(false);
@@ -189,7 +192,10 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
           return;
         }
         setPriorities(predicted.datos);
-        setMessage("Escenario cargado y prioridades calculadas por el árbol.");
+        const recorte = valid.datos.truncated
+          ? ` Recorte: ${valid.datos.segments.length} de ${valid.datos.total ?? "?"} tramos del área pedida.`
+          : "";
+        setMessage(`Escenario cargado y prioridades calculadas por el árbol.${recorte}`);
       } else {
         setMessage(
           `Escenario grande (${valid.datos.segments.length} tramos): acercá el mapa para predecir y colorear el área visible.`,
@@ -211,8 +217,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     [scenario, limites],
   );
   // Evita decenas de miles de <option> mientras la vista es demasiado amplia.
-  const iniciosDisponibles = areaVisible && areaVisible.tramos.length <= MAX_TRAMOS_CALCULO
-    ? areaVisible.nodos : [];
+  const iniciosDisponibles = areaVisible ? areaVisible.nodos : [];
   const inicioVisible = iniciosDisponibles.some((n) => n.nodeId === startNodeId)
     ? startNodeId : iniciosDisponibles[0]?.nodeId ?? "";
   const mapModel = useMemo(() => {
@@ -368,7 +373,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
   }
 
   function plan() {
-    if (!scenario || !areaVisible || !limites || !inicioVisible || include.length === 0 || areaVisible.tramos.length > MAX_TRAMOS_CALCULO) return;
+    if (!scenario || !areaVisible || !limites || !inicioVisible || include.length === 0) return;
     if (priorities.length === 0) return;
     setPlanning(true);
     setMessage("Calculando el circuito en esta zona…");
@@ -411,7 +416,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     });
   }
 
-  const puedePlanificar = !(loading || planning || priorities.length === 0 || include.length === 0 || !inicioVisible || !areaVisible || areaVisible.tramos.length > MAX_TRAMOS_CALCULO);
+  const puedePlanificar = !(loading || planning || priorities.length === 0 || include.length === 0 || !inicioVisible || !areaVisible);
   const puedeFijar = !!areaVisible && areaVisible.tramos.length > 0;
   const areaTramos = areaVisible ? areaVisible.tramos.length : null;
   const deshabilitado = loading || planning;

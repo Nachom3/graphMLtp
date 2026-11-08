@@ -21,9 +21,15 @@ import { conRepeticiones } from "../domain/types";
  */
 export type RoutePlanInput = PlanInput & { startNodeId: string };
 
+/** Recorte que pide el frontend: el máximo lo manda el cliente (S3). */
+export interface OpcionesEscenario {
+  bbox?: VentanaMapa;
+  limit?: number;
+}
+
 export interface ApiGateway {
   health(signal?: AbortSignal): Promise<{ status: string; version: string; schema: string }>;
-  getScenario(signal?: AbortSignal): Promise<Scenario>;
+  getScenario(opts?: OpcionesEscenario, signal?: AbortSignal): Promise<Scenario>;
   predictPriorities(
     modelId: ModelId,
     segments: Segment[],
@@ -149,8 +155,9 @@ export async function obtenerEscenario(
   gw: ApiGateway,
   store: RequestStore,
   signal?: AbortSignal,
+  opts?: OpcionesEscenario,
 ): Promise<OperationState<Scenario>> {
-  const result = await ejecutar(store, gw.getScenario(signal), (scenario) =>
+  const result = await ejecutar(store, gw.getScenario(opts, signal), (scenario) =>
     scenario.segments.length === 0 ? "escenario sin tramos" : null,
   );
   if (result.estado !== "exito") return result;

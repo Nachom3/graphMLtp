@@ -12,8 +12,11 @@ export const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "low", label: "Baja" },
 ];
 
-/** Límite conservador de trabajo interactivo; no promete un tiempo máximo. */
-export const MAX_TRAMOS_CALCULO = 300;
+/**
+ * Tope de tramos que pide el frontend al cargar el escenario (S3).
+ * El backend aplica además su propio tope de seguridad (SCENARIO_MAX_LIMIT).
+ */
+export const LIMITE_TRAMOS_ESCENARIO = 2000;
 export const TRAMOS_POR_PAGINA = 100;
 /** Escenarios chicos: se predicen todos los tramos al cargar. */
 export const UMBRAL_PREDICCION_GLOBAL = 2500;

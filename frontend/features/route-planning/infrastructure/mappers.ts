@@ -15,6 +15,9 @@ import type {
 export interface ScenarioDTO {
   scenario_id?: string;
   version?: string;
+  total?: number;
+  limit?: number | null;
+  truncated?: boolean;
   nodes: { node_id: string; lon: number; lat: number }[];
   segments: {
     segment_id: string;
@@ -130,6 +133,8 @@ export function scenarioFromDTO(dto: ScenarioDTO) {
   return {
     scenarioId: dto.scenario_id ?? "escenario-api",
     version: dto.version ?? "v1",
+    total: dto.total ?? dto.segments.length,
+    truncated: dto.truncated ?? false,
     nodes: dto.nodes.map((n) => ({ nodeId: n.node_id, lon: n.lon, lat: n.lat })),
     segments: dto.segments.map((s) => ({
       segmentId: s.segment_id,

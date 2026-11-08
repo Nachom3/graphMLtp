@@ -47,6 +47,24 @@ describe("httpGateway: backend en inglés, único lugar con fetch", () => {
     mockFetchOnce(() => jsonRes({ nodes: [], segments: [{ geometry: { type: "LineString", coordinates: [[-56, -34]] } }] }));
     await expect(gw.getScenario()).rejects.toThrow(/Geometría/);
   });
+  it("envía el recorte del frontend: bbox y limit en la query; sin opts pide /scenario pelado", async () => {
+    const vistas: string[] = [];
+    mockFetchOnce((url) => {
+      vistas.push(url);
+      return jsonRes({ nodes: [], segments: [] });
+    });
+    const gw = crearHttpGateway("http://test");
+    await gw.getScenario();
+    expect(vistas[0]).toBe("http://test/scenario");
+    await gw.getScenario({
+      bbox: { sur: -34.92, norte: -34.9, oeste: -56.17, este: -56.14 },
+      limit: 2000,
+    });
+    expect(vistas[1]).toContain("/scenario?");
+    for (const parte of ["sur=-34.92", "norte=-34.9", "oeste=-56.17", "este=-56.14", "limit=2000"]) {
+      expect(vistas[1]).toContain(parte);
+    }
+  });
   it("health devuelve status, versión y esquema", async () => {
     mockFetchOnce((url) => {
       expect(url).toContain("/health");

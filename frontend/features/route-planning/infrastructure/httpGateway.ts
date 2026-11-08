@@ -1,4 +1,4 @@
-import type { ApiGateway, RoutePlanInput } from "../application/usecases";
+import type { ApiGateway, OpcionesEscenario, RoutePlanInput } from "../application/usecases";
 import type {
   ContainerPoint,
   ModelComparison,
@@ -55,9 +55,18 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
     health(signal?: AbortSignal) {
       return get<{ status: string; version: string; schema: string }>("/health", signal);
     },
-    async getScenario(signal?: AbortSignal) {
+    async getScenario(opts?: OpcionesEscenario, signal?: AbortSignal) {
       // Una API caída o un escenario inválido no deben simular datos reales.
-      return scenarioFromDTO(await get<ScenarioDTO>("/scenario", signal));
+      const query = new URLSearchParams();
+      if (opts?.bbox) {
+        query.set("sur", String(opts.bbox.sur));
+        query.set("norte", String(opts.bbox.norte));
+        query.set("oeste", String(opts.bbox.oeste));
+        query.set("este", String(opts.bbox.este));
+      }
+      if (opts?.limit !== undefined) query.set("limit", String(opts.limit));
+      const qs = query.toString();
+      return scenarioFromDTO(await get<ScenarioDTO>(`/scenario${qs ? `?${qs}` : ""}`, signal));
     },
     async predictPriorities(
       modelId: ModelId,

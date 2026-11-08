@@ -5,7 +5,6 @@ application use cases. It does not implement collection or graph logic.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Literal
 
@@ -30,6 +29,7 @@ from ..composition import (
     create_validate_load_dataset_use_case,
     pilot_scenario_source,
 )
+from ..config import resolve_limit, scenario_source_is_custom
 from ..domain.entities.predicted_segment import PredictedSegment
 from ..domain.entities.route_config import RouteConfig
 from ..domain.entities.segment_features import SegmentFeatures
@@ -86,6 +86,46 @@ class ExplainRequest(BaseModel):
     segment: SegmentDTO
 
 
+def _subsegment_intersects_bbox(
+    x1: float, y1: float, x2: float, y2: float,
+    *, sur: float, norte: float, oeste: float, este: float,
+) -> bool:
+    """Liang-Barsky: whether one [lon, lat] sub-segment touches the bbox."""
+    dx, dy = x2 - x1, y2 - y1
+    t0, t1 = 0.0, 1.0
+    for p, q in (
+        (-dx, x1 - oeste), (dx, este - x1), (-dy, y1 - sur), (dy, norte - y1)
+    ):
+        if p == 0:
+            if q < 0:
+                return False
+        elif p < 0:
+            t0 = max(t0, q / p)
+        else:
+            t1 = min(t1, q / p)
+    return t0 <= t1
+
+
+def _segment_in_bbox(
+    coords: list[list[float]] | None,
+    origin: tuple[float, float] | None,
+    destination: tuple[float, float] | None,
+    *, sur: float, norte: float, oeste: float, este: float,
+) -> bool:
+    """Mirror the frontend `lineaIntersecaLimites`: full line, crossings count."""
+    points = [tuple(p) for p in coords if len(p) == 2] if coords else []
+    if len(points) < 2:
+        if origin is None or destination is None:
+            return False
+        points = [origin, destination]
+    return any(
+        _subsegment_intersects_bbox(
+            a[0], a[1], b[0], b[1], sur=sur, norte=norte, oeste=oeste, este=este
+        )
+        for a, b in zip(points, points[1:])  # noqa: B905 - adjacent pairs, lengths differ by design
+    )
+
+
 def _error(status_code: int, code: str, detail: str) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -113,7 +153,28 @@ def create_router(
     )
 
     @router.get("/scenario", response_model=None)
-    def get_scenario() -> dict | JSONResponse:
+    def get_scenario(
+        sur: float | None = None,
+        norte: float | None = None,
+        oeste: float | None = None,
+        este: float | None = None,
+        limit: int | None = None,
+    ) -> dict | JSONResponse:
+        bbox = [sur, norte, oeste, este]
+        if any(v is not None for v in bbox) and not all(v is not None for v in bbox):
+            return _error(
+                422, "INVALID_REQUEST",
+                "bbox incompleto: sur, norte, oeste y este son requeridos juntos",
+            )
+        if (
+            sur is not None and norte is not None and oeste is not None and este is not None
+            and (sur > norte or oeste > este)
+        ):
+            return _error(422, "INVALID_REQUEST", "bbox inválido: sur<=norte y oeste<=este")
+        try:
+            effective = resolve_limit(limit)
+        except ValueError as exc:
+            return _error(422, "INVALID_REQUEST", str(exc))
         try:
             load_scenario = validate.execute  # caso de uso; no es SQL (falso positivo del linter)
             nodes, segments = load_scenario(source, "v1")
@@ -125,13 +186,32 @@ def create_router(
             if scenario_source is None:
                 detail += "; generá o revisá el escenario con python scripts/build_dataset.py --montevideo"
             return _error(503, "SCENARIO_UNAVAILABLE", detail)
+        matched = segments
+        if sur is not None and norte is not None and oeste is not None and este is not None:
+            positions = {node["nodo_id"]: (node["lon"], node["lat"]) for node in nodes}
+            matched = [
+                segment
+                for segment in segments
+                if _segment_in_bbox(
+                    (geometries.get(segment.segment_id) or {}).get("coordinates"),
+                    positions.get(segment.origin_node),
+                    positions.get(segment.destination_node),
+                    sur=sur, norte=norte, oeste=oeste, este=este,
+                )
+            ]
+        total = len(matched)
+        page = matched[:effective] if effective is not None else matched
+        used_nodes = {n for segment in page for n in (segment.origin_node, segment.destination_node)}
         return {
             "scenario_id": (
                 "pilot" if scenario_source is not None
-                else Path(source).name if os.environ.get("COLLECTION_SCENARIO_SOURCE")
+                else Path(source).name if scenario_source_is_custom()
                 else "montevideo"
             ),
             "version": "v1",
+            "total": total,
+            "limit": effective,
+            "truncated": total > len(page),
             "nodes": [
                 {
                     "node_id": node["nodo_id"],
@@ -139,10 +219,11 @@ def create_router(
                     "lat": node["lat"],
                 }
                 for node in nodes
+                if node["nodo_id"] in used_nodes
             ],
             "segments": [
                 {**segment.__dict__, "geometry": geometries.get(segment.segment_id)}
-                for segment in segments
+                for segment in page
             ],
         }
 

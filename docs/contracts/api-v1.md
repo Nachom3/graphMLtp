@@ -23,6 +23,18 @@ Returns `{"status":"ok","version":"v1","schema":"v1"}`.
 ### `GET /scenario`
 
 Returns the generated full-city dataset by default (`dataset/salida-montevideo/`).
+With no query params it returns every segment (up to the configured default limit).
+To load only a part, pass an optional WGS84 bbox and/or `limit`
+(same validation as `GET /containers`):
+
+```http
+GET /scenario?sur=-34.92&norte=-34.90&oeste=-56.17&este=-56.14&limit=2000
+```
+
+A segment is included when its line intersects the bbox (crossings count,
+endpoints are the fallback without geometry); `nodes` are trimmed to the
+referenced ones. The response adds `total` (bbox matches before `limit`),
+the effective `limit` and `truncated`. Without params the dataset is whole.
 Each geometry is the clipped/split IDE street line, in WGS84 `[longitude, latitude]`
 and oriented from `origin_node` to `destination_node`:
 
@@ -30,6 +42,9 @@ and oriented from `origin_node` to `destination_node`:
 {
   "scenario_id": "montevideo",
   "version": "v1",
+  "total": 1,
+  "limit": null,
+  "truncated": false,
   "nodes": [{"node_id": "N0001", "lon": -56.155, "lat": -34.91}],
   "segments": [{
     "segment_id": "T0001", "origin_node": "N0001",
@@ -42,7 +57,9 @@ and oriented from `origin_node` to `destination_node`:
 ```
 
 The server administrator may set `COLLECTION_SCENARIO_SOURCE` to an alternate
-compatible dataset directory. Missing or inconsistent geometry returns
+compatible dataset directory (centralized in `backend/src/collection/config.py`
+along with `COLLECTION_SCENARIO_DEFAULT_LIMIT` and `COLLECTION_SCENARIO_MAX_LIMIT`).
+Missing or inconsistent geometry returns
 `SCENARIO_UNAVAILABLE`; there is no silent fallback to the test fixture.
 Explicitly injected legacy fixtures can omit geometry (`null`). The client cannot
 select an arbitrary filesystem path.
