@@ -1,3 +1,4 @@
+export { default as PlanificadorDemo } from "../../app/PlanificadorDemo";
 export {
   cargarEscenario,
   consultarComparacion,

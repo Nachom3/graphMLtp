@@ -84,6 +84,11 @@ export interface RouteStep {
 export interface RouteCost {
   readonly totalCostM: number;
   readonly unit: string; // p. ej. "meters"
+  readonly mandatory?: SegmentId[];
+  readonly transit?: SegmentId[];
+  readonly repeatedDistanceM?: number;
+  /** Proporción definida por el backend, entre 0 y 1. */
+  readonly coverage?: number;
 }
 
 /** Entrada de planificación (backend: nodes + segments + priorities + include). */
