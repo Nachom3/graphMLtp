@@ -12,7 +12,7 @@ import {
   solicitarRecorrido,
   type ApiGateway,
 } from "../../application/usecases";
-import { seleccionarAreaVisible, toMapViewModel, type LimitesMapa, type MapViewModel } from "../map-view";
+import { filtrarContenedoresEnGrafo, seleccionarAreaVisible, toMapViewModel, type LimitesMapa, type MapViewModel } from "../map-view";
 import type {
   ContainerPoint,
   Node,
@@ -334,6 +334,31 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     return () => clearTimeout(id);
   }, [reproduciendo, pasoActual, steps.length]);
 
+  // SOLO contenedores dentro del grafo modelado: el backend devuelve por bbox
+  // (ventana visible) y eso incluye puntos fuera de la red vial que confunden.
+  // Se filtran a <=25 m de algún tramo del área modelada (mismo radio del builder).
+  // En modo recorrido se recorta además a los tramos obligatorios: los que están
+  // en el grafo pero fuera del circuito el camión no los recoge y no se muestran.
+  const contenedoresEnGrafo = useMemo(() => {
+    const tramosBase = areaVisible?.tramos ?? scenario?.segments ?? [];
+    if (tramosBase.length === 0 || contenedores.length === 0) return [];
+    const nodos = new Map(
+      (areaVisible?.nodos ?? scenario?.nodes ?? []).map((n) => [
+        n.nodeId,
+        { lat: n.lat, lon: n.lon },
+      ]),
+    );
+    const enGrafo = filtrarContenedoresEnGrafo({ contenedores, tramos: tramosBase, nodos });
+    if (modoMapa !== "recorrido" || steps.length === 0) return enGrafo;
+    const idsObligatorios = cost?.mandatory?.length
+      ? new Set(cost.mandatory)
+      : new Set(steps.map((s) => s.segmentId));
+    if (idsObligatorios.size === 0) return enGrafo;
+    const tramosObligatorios = tramosBase.filter((t) => idsObligatorios.has(t.segmentId));
+    if (tramosObligatorios.length === 0) return [];
+    return filtrarContenedoresEnGrafo({ contenedores: enGrafo, tramos: tramosObligatorios, nodos });
+  }, [contenedores, areaVisible, scenario, modoMapa, steps, cost]);
+
   function resetRouteView() {
     setSteps([]);
     setCost(null);
@@ -511,7 +536,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     revisionVisible, busquedaTramo, steps, revisionRuta, cost,
     pasoActual, reproduciendo, loading, planning, message,
     tramoSeleccionadoId, explicacion, explicacionNota,
-    soloTramosVisibles, mostrarContenedores, contenedores, contenedoresTotal,
+    soloTramosVisibles, mostrarContenedores, contenedores: contenedoresEnGrafo, contenedoresTotal,
     modoMapa,
     priorityBySegment, areaVisible, iniciosDisponibles, inicioVisible,
     mapModel, tramosFiltrados, totalPaginas, paginaVisible,

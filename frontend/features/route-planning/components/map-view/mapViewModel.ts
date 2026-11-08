@@ -180,6 +180,92 @@ export function orientarPasos(args: {
   return out;
 }
 
+/**
+ * Radio (m) para considerar un contenedor dentro del grafo.
+ * Igual que SNAP_RADIUS_M del dataset_builder: el builder asigna cada
+ * contenedor al tramo más cercano dentro de 25 m; más lejos queda en
+ * cuarentena (no-asignado). El mapa solo muestra los asignables al grafo
+ * modelado para no confundir con contenedores de otras zonas.
+ */
+export const RADIO_CONTENEDOR_GRAFO_M = 25;
+
+/** Distancia haversiana punto→segmento proyectado en metros (plano local). */
+function distanciaPuntoSegmentoM(
+  lat: number,
+  lon: number,
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+): number {
+  const R = 6371000;
+  const aRad = (lat * Math.PI) / 180;
+  const cosLat = Math.cos(aRad);
+  const toX = (lo: number) => ((lo - lon) * Math.PI) / 180 * R * cosLat;
+  const toY = (la: number) => ((la - lat) * Math.PI) / 180 * R;
+  const x1 = toX(lon1);
+  const y1 = toY(lat1);
+  const x2 = toX(lon2);
+  const y2 = toY(lat2);
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len2 = dx * dx + dy * dy;
+  let t = len2 === 0 ? 0 : -(x1 * dx + y1 * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const px = x1 + t * dx;
+  const py = y1 + t * dy;
+  return Math.hypot(px, py);
+}
+
+/** ¿El punto está a <= radio de la polilínea del tramo? */
+function puntoCercaDeLinea(
+  lat: number,
+  lon: number,
+  linea: [number, number][],
+  radioM: number,
+): boolean {
+  for (let i = 0; i < linea.length - 1; i++) {
+    const [lat1, lon1] = linea[i];
+    const [lat2, lon2] = linea[i + 1];
+    // Rechazo rápido por bbox expandida (~grados) antes del cálculo fino.
+    const margenLat = radioM / 111320 + 1e-9;
+    const cosLat = Math.max(0.2, Math.abs(Math.cos((lat * Math.PI) / 180)));
+    const margenLon = radioM / (111320 * cosLat) + 1e-9;
+    const minLat = Math.min(lat1, lat2) - margenLat;
+    const maxLat = Math.max(lat1, lat2) + margenLat;
+    const minLon = Math.min(lon1, lon2) - margenLon;
+    const maxLon = Math.max(lon1, lon2) + margenLon;
+    if (lat < minLat || lat > maxLat || lon < minLon || lon > maxLon) continue;
+    if (distanciaPuntoSegmentoM(lat, lon, lat1, lon1, lat2, lon2) <= radioM) return true;
+  }
+  return false;
+}
+
+/**
+ * SOLO contenedores dentro del grafo modelado: conserva los puntos a <=
+ * radioM de algún tramo del grafo (por geometría real o recta entre nodos).
+ * Sin grafo o sin puntos devuelve []. Pura y testeable en Node.
+ */
+export function filtrarContenedoresEnGrafo<T extends { lat: number; lon: number }>(args: {
+  contenedores: T[];
+  tramos: Segment[];
+  nodos: Map<string, { lat: number; lon: number }>;
+  radioM?: number;
+}): T[] {
+  const { contenedores, tramos, nodos, radioM = RADIO_CONTENEDOR_GRAFO_M } = args;
+  if (contenedores.length === 0 || tramos.length === 0) return [];
+  // Precalcula líneas una vez: geometría real o recta origen→destino.
+  const lineas: [number, number][][] = tramos.map((t) => puntosDelTramo(t, nodos));
+  return contenedores.filter((p) => {
+    if (!Number.isFinite(p.lat) || !Number.isFinite(p.lon)) return false;
+    for (const linea of lineas) {
+      if (linea.length < 2) continue;
+      if (puntoCercaDeLinea(p.lat, p.lon, linea, radioM)) return true;
+    }
+    return false;
+  });
+}
+
 /** Construye el view-model desde tramos + prioridades + recorrido. */
 export function toMapViewModel(args: {
   tramos: Segment[];
