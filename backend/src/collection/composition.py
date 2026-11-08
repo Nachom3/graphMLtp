@@ -20,7 +20,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from .adapters.datasets.container_store import FileContainerStore
 from .adapters.datasets.csv_dataset_reader import CsvDatasetReader
+from .adapters.datasets.geojson_geometry_reader import GeoJsonGeometryReader
 from .adapters.graphs.networkx_route_planner import NetworkxRoutePlanner
 from .adapters.models.pipeline_store import (
     DEFAULT_MODEL_ID,
@@ -38,6 +40,16 @@ def create_validate_load_dataset_use_case(
 ) -> ValidateLoadDataset:
     """Wire validation/loading with the CSV reader (seed 0, as #18)."""
     return ValidateLoadDataset(reader or CsvDatasetReader())
+
+
+def create_container_reader() -> FileContainerStore:
+    """Wire container points to the file-backed store."""
+    return FileContainerStore()
+
+
+def create_geometry_reader() -> GeoJsonGeometryReader:
+    """Wire road geometry to the GeoJSON sidecar reader."""
+    return GeoJsonGeometryReader()
 
 
 def create_compare_models_use_case():

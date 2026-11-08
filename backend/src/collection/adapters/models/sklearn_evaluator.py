@@ -32,36 +32,26 @@ logic is duplicated: rule, seed, split and preprocessor all come from
 """
 from __future__ import annotations
 
-from collections import Counter
 from typing import Any
 
 import pandas as pd
 from sklearn.base import clone
 from sklearn.dummy import DummyClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
-)
 from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold, cross_validate
 from sklearn.pipeline import make_pipeline
 
 from ...application.models.evaluation_protocol import EvaluationProtocol
 from ...application.models.model_comparison import ModelComparison
 from ...application.models.model_metrics import ModelMetrics
+from .cv_policy import resolve_cv_folds, resolve_plain_folds
+from .framing import LABEL_COLUMN, PARTITIONS, frame_from_rows, split_xy
+from .metrics import CLASS_LABELS, validation_scores
 from .model_specs import MODEL_IDS, build_pipeline, param_grid_for
 
-FEATURE_COLUMNS = (
-    "cantidad_contenedores",
-    "dias_desde_ultima_recoleccion",
-    "tipo_zona",
-    "historico_quejas_vecinales",
-)
-LABEL_COLUMN = "prioridad_recoleccion"
-CLASS_LABELS = ("baja", "media", "alta")
-PARTITIONS = ("train", "validation", "test")
+# Canonical impls live in framing.py / metrics.py; aliases keep call sites readable.
+_frame_from_rows = frame_from_rows
+_split_xy = split_xy
+_validation_scores = validation_scores
 
 _SYNTHETIC_LIMITATIONS = (
     "Variables y etiqueta sinteticas: historico_quejas_vecinales son sorteos "
@@ -72,82 +62,8 @@ _SYNTHETIC_LIMITATIONS = (
 )
 
 
-def resolve_cv_folds(y_train: list[str] | pd.Series, requested: int) -> tuple[int, int]:
-    """Return (pedidos, usados) for the stratified CV inside train.
-
-    ``usados`` is ``min(requested, least-frequent-class count)``. Raises
-    ``ValueError`` when fewer than 2 stratified folds are viable.
-    """
-    counts = Counter(list(y_train))
-    if not counts:
-        raise ValueError("train split is empty; stratified CV is infeasible")
-    least = min(counts.values())
-    used = min(int(requested), int(least))
-    if used < 2:
-        raise ValueError(
-            "stratified CV infeasible: the least-frequent train class has "
-            f"{least} example(s); at least 2 stratified folds are required "
-            f"(requested {requested})"
-        )
-    return int(requested), int(used)
-
-
-def resolve_plain_folds(n_train: int, requested: int) -> tuple[int, int]:
-    """Return (pedidos, usados) for non-stratified KFold inside train."""
-    if n_train <= 0:
-        raise ValueError("train split is empty; CV is infeasible")
-    used = min(int(requested), int(n_train))
-    if used < 2:
-        raise ValueError(
-            "CV infeasible: train has "
-            f"{n_train} example(s); at least 2 folds are required "
-            f"(requested {requested})"
-        )
-    return int(requested), int(used)
-
-
-def _frame_from_rows(rows: list[dict]) -> pd.DataFrame:
-    frame = pd.DataFrame(rows)
-    required = {*FEATURE_COLUMNS, LABEL_COLUMN, "_partition", "tramo_id"}
-    missing = sorted(required - set(frame.columns))
-    if missing:
-        raise ValueError(f"rows are missing columns: {', '.join(missing)}")
-    bad = sorted(set(frame["_partition"].astype(str)) - set(PARTITIONS))
-    if bad:
-        raise ValueError(f"invalid _partition values: {bad}")
-    unknown_models_note = sorted(set(frame[LABEL_COLUMN].astype(str)) - set(CLASS_LABELS))
-    if unknown_models_note:
-        raise ValueError(f"invalid {LABEL_COLUMN} values: {unknown_models_note}")
-    return frame
-
-
-def _split_xy(frame: pd.DataFrame, partition: str) -> tuple[pd.DataFrame, pd.Series]:
-    part = frame.loc[frame["_partition"] == partition]
-    X = part.loc[:, list(FEATURE_COLUMNS)].copy()
-    y = part[LABEL_COLUMN].copy()
-    return X, y
-
-
-def _validation_scores(y_true: pd.Series, y_pred: Any) -> dict[str, Any]:
-    labels = [label for label in CLASS_LABELS if label in set(y_true.tolist()) | set(y_pred)]
-    ordered = [label for label in CLASS_LABELS if label in labels] or list(CLASS_LABELS)
-    return {
-        "accuracy": float(accuracy_score(y_true, y_pred)),
-        "precision_macro": float(
-            precision_score(y_true, y_pred, average="macro", zero_division=0)  # type: ignore[arg-type]
-        ),
-        "recall_macro": float(
-            recall_score(y_true, y_pred, average="macro", zero_division=0)  # type: ignore[arg-type]
-        ),
-        "f1_macro": float(  # type: ignore[arg-type]
-            f1_score(y_true, y_pred, average="macro", zero_division=0)  # type: ignore[arg-type]
-        ),
-        "confusion_matrix": tuple(
-            tuple(int(value) for value in row)
-            for row in confusion_matrix(y_true, y_pred, labels=list(CLASS_LABELS)).tolist()
-        ),
-        "label_order": tuple(ordered),
-    }
+# resolve_cv_folds / resolve_plain_folds live in cv_policy.py (re-exported above).
+# frame_from_rows / split_xy live in framing.py (aliased above).
 
 
 class SklearnEvaluator:

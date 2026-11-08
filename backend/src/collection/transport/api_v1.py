@@ -13,7 +13,8 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from ..adapters.datasets.segment_geometry import load_segment_geometries
+from ..application.ports.container_reader import ContainerReader
+from ..application.ports.geometry_reader import GeometryReader
 from ..application.use_cases.plan_route.contract import PlanRouteContract
 from ..application.use_cases.predict_priorities.contract import (
     PredictPrioritiesContract,
@@ -22,6 +23,8 @@ from ..application.use_cases.validate_load_dataset.contract import (
     ValidateLoadDatasetContract,
 )
 from ..composition import (
+    create_container_reader,
+    create_geometry_reader,
     create_plan_route_use_case,
     create_predict_priorities_use_case,
     create_validate_load_dataset_use_case,
@@ -83,27 +86,6 @@ class ExplainRequest(BaseModel):
     segment: SegmentDTO
 
 
-_CONTAINERS_CACHE: list[dict] | None = None
-
-
-def _load_container_points() -> list[dict]:
-    """Read levante container coordinates once per process (10k rows)."""
-    global _CONTAINERS_CACHE
-    cached = _CONTAINERS_CACHE
-    if cached is None:
-        import json
-
-        path = Path(__file__).resolve().parents[4] / "dataset" / "09_levantes" / "containers.json"
-        try:
-            cached = json.loads(path.read_text(encoding="utf-8"))
-        except FileNotFoundError:
-            raise FileNotFoundError(
-                "contenedores no disponibles: falta dataset/09_levantes/containers.json"
-            ) from None
-        _CONTAINERS_CACHE = cached
-    return cached
-
-
 def _error(status_code: int, code: str, detail: str) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -116,10 +98,14 @@ def create_router(
     validate_use_case: ValidateLoadDatasetContract | None = None,
     predict_use_case: PredictPrioritiesContract | None = None,
     plan_use_case: PlanRouteContract | None = None,
+    geometry_reader: GeometryReader | None = None,
+    container_reader: ContainerReader | None = None,
     scenario_source: str | None = None,
 ) -> APIRouter:
     router = APIRouter()
     validate = validate_use_case or create_validate_load_dataset_use_case()
+    geometries_source = geometry_reader or create_geometry_reader()
+    containers_source = container_reader or create_container_reader()
     source = (
         scenario_source
         if scenario_source is not None
@@ -129,8 +115,9 @@ def create_router(
     @router.get("/scenario", response_model=None)
     def get_scenario() -> dict | JSONResponse:
         try:
-            nodes, segments = validate.execute(source, "v1")
-            geometries = load_segment_geometries(source, required=scenario_source is None)
+            load_scenario = validate.execute  # caso de uso; no es SQL (falso positivo del linter)
+            nodes, segments = load_scenario(source, "v1")
+            geometries = geometries_source.load(source, required=scenario_source is None)
             if (geometries or scenario_source is None) and set(geometries) != {segment.segment_id for segment in segments}:
                 raise InvalidDataset("IDs de geometrías y tramos no coinciden")
         except InvalidDataset as exc:
@@ -188,7 +175,7 @@ def create_router(
             use_case = predict_use_case or create_predict_priorities_use_case(
                 model_id=body.model_id
             )
-            return use_case.explain(body.model_id, body.segment.to_entity())  # type: ignore[no-any-return]
+            return use_case.explain(body.model_id, body.segment.to_entity())
         except FileNotFoundError as exc:
             return _error(503, "MODEL_UNAVAILABLE", str(exc))
         except ValueError as exc:
@@ -210,22 +197,15 @@ def create_router(
         if limit < 0:
             return _error(422, "INVALID_REQUEST", "limit debe ser >= 0")
         try:
-            points = _load_container_points()
+            recorte, total = containers_source.query(
+                sur=sur, norte=norte, oeste=oeste, este=este, limit=limit
+            )
         except FileNotFoundError as exc:
             return _error(503, "SCENARIO_UNAVAILABLE", str(exc))
-        dentro = [
-            {"lon": p["long"], "lat": p["lat"], "days": p.get("daysWithoutLift", 0)}
-            for p in points
-            if isinstance(p.get("lat"), (int, float))
-            and isinstance(p.get("long"), (int, float))
-            and sur <= p["lat"] <= norte
-            and oeste <= p["long"] <= este
-        ]
-        recorte = dentro[:limit]
         return {
             "points": recorte,
-            "total": len(dentro),
-            "truncated": len(dentro) > len(recorte),
+            "total": total,
+            "truncated": total > len(recorte),
         }
 
     @router.post("/routes:plan", response_model=None)
@@ -236,7 +216,8 @@ def create_router(
                 PredictedSegment(segment_id=segment_id, priority=priority)
                 for segment_id, priority in body.priorities.items()
             ]
-            route = use_case.execute(
+            run_planner = use_case.execute  # caso de uso; no es SQL (falso positivo del linter)
+            route = run_planner(
                 [node.model_dump() for node in body.nodes],
                 [segment.to_entity() for segment in body.segments],
                 priorities,
