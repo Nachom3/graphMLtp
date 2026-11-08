@@ -1,115 +1,126 @@
-# Contrato API v1 (fuente de verdad para el frontend #13)
+# API v1 contract
 
-Base: la API expone los casos de uso del backend; el frontend **visualiza**
-lo que el backend calcula. Versiones: API `v1` + esquema dataset `v1`.
-OpenAPI generado en `/openapi.json` (FastAPI); este documento manda ante
-cualquier duda.
+The FastAPI transport is the source of truth for the HTTP contract. It uses
+English identifiers and values, matching the backend domain and DTOs. The
+frontend visualizes backend results; requests never provide training rows and
+visualization endpoints never train models.
 
-## Identificadores y versiones
+## Versions and identifiers
 
-- `tramo_id`: estable (`reftramo` IDE en #9; `T0001`… solo en fixtures).
-- `nodo_id`: estable (`N0001`…).
-- `modelo_id`: `arbol` | `logistica` | `regla-v1` (demo; #10 agrega reales).
-- Toda respuesta de escritura incluye lo pedido; `version: "v1"` en `/salud`.
-
-## Geometrías y unidades
-
-- Nodos: `lon`/`lat` WGS84 (EPSG:4326).
-- Tramos: `longitud_m` en **metros** (geodésica en #9; metros directos en fixture).
-- Recorrido: `orden` (tramo_ids en visita, con repeticiones incluidas),
-  `repeticiones` (tramo_ids visitados más de una vez),
-  `costo_total_m` (suma con repeticiones, metros).
+- API version: `v1`; dataset schema: `v1`.
+- `segment_id` and `node_id` are stable domain identifiers. Fixture IDs such as
+  `T0001` and `N0001` are examples only.
+- Priorities: `low`, `medium`, `high`.
+- Zone types: `residential`, `commercial`, `industrial`.
+- Node coordinates are WGS84 `lon`/`lat`; `length_m` and route costs are metres.
 
 ## Endpoints
 
-### `GET /salud` → `{estado, version, esquema}`
+### `GET /health`
 
-### `POST /dataset/validar`
+Returns `{"status":"ok","version":"v1","schema":"v1"}`.
 
-```json
-{"fuente": "<directorio con nodos.csv+tramos.csv>", "version_esquema": "v1"}
-```
+### `GET /scenario`
 
-→ `{"valido": true, "n_nodos": 6, "n_tramos": 12}`.
-
-### `POST /modelos/comparar` (offline; no llamar desde visualización)
-
-> Este endpoint conserva el contrato API anterior y no implementa la
-> preparación offline #18. El adaptador de #18 prepara el CSV en memoria con
-> seed 0, particiones 60/20/20 y una etiqueta construida usando quejas
-> sintéticas anónimas; no cambia este endpoint ni agrega almacenamiento. El
-> `test_size` del ejemplo sigue siendo legado y no describe ese reparto.
+Returns the bundled pilot scenario:
 
 ```json
-{"filas": [{"tipo_zona": "comercial", "cantidad_contenedores": 2,
-  "dias_desde_ultima_recoleccion": 4, "historico_quejas_vecinales": 2,
-  "prioridad_recoleccion": "alta"}],
- "configs": ["arbol", "logistica"], "semilla": 0}
+{
+  "scenario_id": "pilot",
+  "version": "v1",
+  "nodes": [{"node_id": "N0001", "lon": -56.155, "lat": -34.91}],
+  "segments": [{
+    "segment_id": "T0001", "origin_node": "N0001",
+    "destination_node": "N0002", "length_m": 85.5,
+    "zone_type": "residential", "container_count": 1,
+    "days_since_last_collection": 2, "historic_neighbor_complaints": 0
+  }]
+}
 ```
 
-→ `{"metricas": [{"modelo_id": "arbol", "accuracy": 0.67,
-"precision_macro": 0.5, "recall_macro": 0.5, "f1_macro": 0.5,
-"matriz_confusion": [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
-"n_train": 9, "n_test": 3}],
-"baseline_accuracy": 0.33, "mejor_por_cv": "arbol", "registro": {...}}`.
+The actual response includes the full fixture. The client cannot select an
+arbitrary filesystem path.
 
-`registro`: `n_filas`, `test_size`, `semilla`, `cv_folds_pedidos/usados`,
-`cv_accuracy_media_train`, `baseline_mayoria_test`, `versiones`.
+### `POST /predictions:predict`
 
-### `POST /predicciones:predecir`
-
-La preparación #18 expone `tipo_zona`, `cantidad_contenedores`,
-`dias_desde_ultima_recoleccion` y `historico_quejas_vecinales` sintético como
-`X`; `prioridad_recoleccion` es una etiqueta construida sintética y `tramo_id`
-solo identifica. Este ejemplo API no implica que el endpoint acepte o genere
-esas variables; la API no cambió en #18.
+Request:
 
 ```json
-{"modelo_id": "arbol", "filas_entrenamiento": [...],
- "tramos": [{"tramo_id": "T0001", "nodo_origen": "N0001",
-   "nodo_destino": "N0002", "longitud_m": 85.5, "tipo_zona": "residencial",
-   "cantidad_contenedores": 1, "dias_desde_ultima_recoleccion": 2,
-   "historico_quejas_vecinales": 1}]}
+{
+  "model_id": "arbol",
+  "segments": [{
+    "segment_id": "T0001", "origin_node": "N0001",
+    "destination_node": "N0002", "length_m": 85.5,
+    "zone_type": "residential", "container_count": 1,
+    "days_since_last_collection": 2, "historic_neighbor_complaints": 0
+  }]
+}
 ```
 
-→ `{"modelo_id": "arbol", "predicciones":
-[{"tramo_id": "T0001", "prioridad": "baja"}]}` (1:1 por `tramo_id`).
-
-`regla-v1` no necesita `filas_entrenamiento`.
-
-### `POST /recorridos:planificar`
+Response (one result per input segment, in input order):
 
 ```json
-{"nodos": [{"nodo_id": "N0001", "lon": -56.155, "lat": -34.91}],
- "tramos": [...], "prioridades": {"T0001": "baja"},
- "incluir": ["media", "alta"]}
+{"model_id":"arbol","predictions":[{"segment_id":"T0001","priority":"low"}]}
 ```
 
-→ `{"orden": ["T0002", ...], "repeticiones": ["T0005"],
-"costo_total_m": 864.6, "unidad": "metros"}`.
+The endpoint consumes the already-fitted `arbol` model. It does not accept
+`training_rows` or train a model. Other model identifiers are unsupported.
 
-## Métricas (para mostrar en UI)
+### `POST /routes:plan`
 
-Por modelo: `accuracy`, `precision_macro`, `recall_macro`, `f1_macro`,
-`matriz_confusion` (filas=reales, columnas=predichas, orden baja/media/alta),
-`baseline_accuracy`. En el contrato anterior, `mejor_por_cv` identifica el
-modelo elegido por CV. Para #18/#10, la elección también puede usar la
-partición de validación, nunca test; revisar ese campo al adaptar el contrato.
+Request:
 
-## Errores (códigos estables)
+```json
+{
+  "nodes": [{"node_id":"N0001","lon":-56.155,"lat":-34.91}],
+  "segments": [{
+    "segment_id":"T0001", "origin_node":"N0001",
+    "destination_node":"N0002", "length_m":85.5,
+    "zone_type":"residential", "container_count":1,
+    "days_since_last_collection":2, "historic_neighbor_complaints":0
+  }],
+  "priorities": {"T0001":"high"},
+  "include": ["medium", "high"],
+  "start_node_id": "N0001"
+}
+```
 
-| HTTP | `codigo` | Cuándo |
+`include` defaults to `medium` and `high`; `start_node_id` is optional.
+`priorities` maps segment IDs to predicted priorities. Segments with containers
+that meet the selected priorities are mandatory destinations. Segments with
+zero containers can be used as transit edges, but are never destinations.
+
+Response:
+
+```json
+{
+  "order": ["T0001"], "repetitions": [], "total_cost_m": 85.5,
+  "unit": "meters", "mandatory": ["T0001"], "transit": [],
+  "repeated_distance_m": 0.0, "coverage": 1.0
+}
+```
+
+`order` is an ordered list of segment IDs; repeated IDs represent repeated
+traversal. `repetitions` lists IDs visited more than once. Costs include every
+traversal. `mandatory`, `transit`, repeated distance, and coverage support the
+route-planning UI. Disconnected components in the complete graph are an error;
+components connected by zero-container transit segments can be planned.
+
+## Errors
+
+Error bodies use `{"detail":{"code":"...","detail":"..."}}`.
+
+| HTTP | Code | Meaning |
 |---|---|---|
-| 422 | `DATASET_INVALIDO` | fuente ilegible, esquema ≠ v1, invariantes |
-| 422 | `EVALUACION_INVALIDA` | pocas filas, configs vacío, datos mal formados |
-| 422 | `MODELO_DESCONOCIDO` | sklearn sin `filas_entrenamiento` / config rara |
-| 422 | `PREDICCION_SIN_TRAMO` | salida del predictor inconsistente |
-| 422 | `RECORRIDO_IMPOSIBLE` | selección vacía o subgrafo desconexo |
-| 422 | validación Pydantic | forma inválida (falta campo, `longitud_m <= 0`, etc.) |
+| 422 | `INVALID_REQUEST` | Request DTO shape or field validation failed |
+| 422 | `INVALID_DATASET` | Invalid scenario, segment data, or domain invariants |
+| 422 | `IMPOSSIBLE_ROUTE` | Empty destination selection or disconnected complete graph |
+| 422 | `PREDICTION_WITHOUT_SEGMENT` | Predictor output cannot be matched 1:1 to input |
+| 422 | `MODEL_UNKNOWN` | Unsupported model identifier |
+| 503 | `MODEL_UNAVAILABLE` | Fitted model artifact is unavailable |
 
-Forma: `{"detail": {"codigo": "...", "detalle": "..."}}`.
+## OpenAPI
 
-## Ejemplo mínimo (fixture local)
-
-Ver `backend/tests/fixtures/` y `notebooks/12_arquitectura_backend.ipynb`.
-Levantar: `uvicorn recoleccion.api:app --reload --app-dir backend/src`.
+FastAPI generates the OpenAPI document at `/openapi.json` and interactive docs
+at `/docs`. The generated paths and Pydantic request schemas are the executable
+HTTP reference; this document describes their behavior and response contract.

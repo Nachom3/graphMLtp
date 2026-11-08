@@ -22,7 +22,9 @@ class RoutePlanner(Protocol):
 
         Mandatory = ``container_count > 0`` and priority in
         ``config.include``; zero-container edges stay as transit only.
-        Raises ``ImpossibleRoute`` when no destination remains or when
-        mandatory parts have no connection through the full graph.
+        Uses ``config.start_node_id`` as the Eulerian source when provided;
+        raises ``ImpossibleRoute`` if it is not accessible from the chosen
+        route. Also raises when no destination remains or mandatory parts have
+        no connection through the full graph.
         """
         ...

@@ -8,3 +8,4 @@ from dataclasses import dataclass
 class RouteConfig:
     include: tuple[str, ...] = ("medium", "high")
     schema_version: str = "v1"
+    start_node_id: str | None = None

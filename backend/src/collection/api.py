@@ -1,32 +1,41 @@
-"""HTTP transport (template)."""
+"""FastAPI application entry point for the v1 collection API."""
 from __future__ import annotations
-from typing import Literal
-from fastapi import FastAPI
-from pydantic import BaseModel, Field
 
-VERSION = "v1"
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-class SegmentIn(BaseModel):
-    segment_id: str
-    origin_node: str
-    destination_node: str
-    length_m: float = Field(gt=0)
-    zone_type: Literal["residential", "commercial", "industrial"]
-    container_count: int = Field(ge=0)
-    days_since_last_collection: int = Field(ge=0)
-    historic_neighbor_complaints: int = Field(ge=0)
+from .transport.api_v1 import VERSION, create_router
 
-class NodeIn(BaseModel):
-    node_id: str
-    lon: float
-    lat: float
 
 def create_app() -> FastAPI:
-    """Template. TODO: implement routes."""
+    """Create the API and register its v1 transport routes."""
     app = FastAPI(title="Waste collection (graphs + ML)", version=VERSION)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    @app.exception_handler(RequestValidationError)
+    async def validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "detail": {"code": "INVALID_REQUEST", "detail": str(exc)}
+            },
+        )
+
     @app.get("/health")
-    def health() -> dict:
-        raise NotImplementedError
+    def health() -> dict[str, str]:
+        return {"status": "ok", "version": VERSION, "schema": "v1"}
+
+    app.include_router(create_router())
     return app
+
 
 app = create_app()

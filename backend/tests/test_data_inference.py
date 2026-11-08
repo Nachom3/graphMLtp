@@ -303,6 +303,4 @@ def test_composition_wires_prediction_without_training_rows():
             "arbol", pipeline_path="backend/artifacts/ausente.joblib"
         )
     assert isinstance(composition.create_validate_load_dataset_use_case(), ValidateLoadDataset)
-    # #28 sigue siendo dueño del planificador: no lo tocamos.
-    with pytest.raises(NotImplementedError):
-        composition.create_plan_route_use_case()
+    assert type(composition.create_plan_route_use_case()).__name__ == "PlanRoute"

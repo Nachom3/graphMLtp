@@ -148,9 +148,19 @@ Limitaciones: la etiqueta es construida (regla #18 con quejas y zona
 sintéticas); las métricas de #10 miden ajuste a esa regla, no desempeño
 operativo real. Ver `docs/modelo-comparacion.md` y `PLAN.md`.
 
-## API local
+## API v1 local
+
+La API expone el escenario piloto, predicción con el árbol ajustado y
+planificación de recorridos. El contrato HTTP en inglés está en
+[`docs/contracts/api-v1.md`](../docs/contracts/api-v1.md). Las rutas son
+`GET /health`, `GET /scenario`, `POST /predictions:predict` y
+`POST /routes:plan`. La predicción no recibe filas de entrenamiento y ningún
+endpoint de visualización entrena modelos. En planificación, tramos con cero
+contenedores pueden conectar destinos como tránsito, pero no se convierten en
+destinos.
 
 ```bash
-uvicorn recoleccion.api:app --reload --app-dir backend/src
+uvicorn collection.api:app --reload --app-dir backend/src
+# OpenAPI: http://127.0.0.1:8000/openapi.json
 # docs interactivas: http://127.0.0.1:8000/docs
 ```
