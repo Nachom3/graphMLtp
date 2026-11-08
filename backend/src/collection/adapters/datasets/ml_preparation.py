@@ -10,7 +10,6 @@ metadata. No CSV is ever written.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import isfinite
 from pathlib import Path
 from typing import Any, cast
 
@@ -18,6 +17,7 @@ import pandas as pd
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder
 
+from .dataset_loader import CLASSES, load_validated_frame
 from .partitioning.split_sizes import SPLIT_NAMES
 from .partitioning.stratified_split import split_indices
 from .synthetic_complaints import (
@@ -43,16 +43,7 @@ NUMERIC_COLUMNS = (
     "dias_desde_ultima_recoleccion",
     "historico_quejas_vecinales",
 )
-REQUIRED_COLUMNS = (
-    "tramo_id",
-    "tipo_zona",
-    "cantidad_contenedores",
-    "dias_desde_ultima_recoleccion",
-    "prioridad_recoleccion",
-)
-INTEGER_COLUMNS = ("cantidad_contenedores", "dias_desde_ultima_recoleccion")
-ZONES = frozenset(ZONE_WEIGHTS)
-CLASSES = ("baja", "media", "alta")
+# Load/validate constants live in dataset_loader.py (single source of truth).
 CATEGORICAL_COLUMN = "tipo_zona"
 
 
@@ -77,60 +68,11 @@ class MLPreparation:
     preprocessor: ColumnTransformer
 
 
-def _load_frame(source: str | Path | pd.DataFrame) -> pd.DataFrame:
-    if isinstance(source, pd.DataFrame):
-        return source.copy(deep=True)
-    try:
-        return pd.read_csv(source)
-    except (OSError, pd.errors.ParserError, UnicodeError) as exc:
-        raise ValueError(f"unable to read dataset: {exc}") from exc
-
-
-def _validate(frame: pd.DataFrame) -> None:
-    if frame.empty:
-        raise ValueError("dataset must contain at least one row")
-    missing_columns = sorted(set(REQUIRED_COLUMNS) - set(frame.columns))
-    if missing_columns:
-        raise ValueError(f"missing required columns: {', '.join(missing_columns)}")
-    missing = [
-        column for column in REQUIRED_COLUMNS if frame[column].isna().to_numpy().any()
-    ]
-    if missing:
-        raise ValueError(f"missing values in columns: {', '.join(missing)}")
-    ids = frame["tramo_id"].astype(str)
-    if ids.str.strip().eq("").any() or ids.duplicated().any():
-        raise ValueError("tramo_id values must be non-empty and unique")
-    bad_zones = sorted(set(frame["tipo_zona"].astype(str)) - ZONES)
-    if bad_zones:
-        raise ValueError(f"invalid tipo_zona categories: {bad_zones}")
-    for column in INTEGER_COLUMNS:
-        raw_values = cast(pd.Series, frame[column]).tolist()
-        try:
-            numbers = [float(value) for value in raw_values]
-        except (TypeError, ValueError) as exc:
-            raise ValueError(f"{column} must contain non-negative integers") from exc
-        if any(
-            not isfinite(value) or value < 0 or not value.is_integer()
-            for value in numbers
-        ):
-            raise ValueError(f"{column} must contain non-negative integers")
-    invalid_labels = sorted(set(frame["prioridad_recoleccion"].astype(str)) - set(CLASSES))
-    if invalid_labels:
-        raise ValueError(f"invalid prioridad_recoleccion values: {invalid_labels}")
-
-
 def _class_distribution(y: pd.Series) -> dict[str, int]:
     return {label: int(y.eq(label).sum()) for label in CLASSES if y.eq(label).any()}
 
 
-def _load_and_validate(source: str | Path | pd.DataFrame) -> pd.DataFrame:
-    """Load a copy and validate required columns, IDs, categories, values."""
-    frame = _load_frame(source)
-    _validate(frame)
-    frame = frame.reset_index(drop=True)
-    for column in INTEGER_COLUMNS:
-        frame[column] = pd.to_numeric(frame[column])
-    return frame
+# Loading + validation live in dataset_loader.load_validated_frame.
 
 
 def _enrich_frame(frame: pd.DataFrame, *, seed: int) -> pd.DataFrame:
@@ -241,7 +183,7 @@ def prepare_dataset(
     seeded by preparation seed and tramo_id, then summed per segment. Labels use
     score=2*dias+contenedores+zona_w+2*quejas; baja <=0, media <=2, alta >2.
     """
-    frame = _load_and_validate(source)
+    frame = load_validated_frame(source)
     enriched = _enrich_frame(frame, seed=seed)
     X = cast(pd.DataFrame, enriched.loc[:, list(FEATURE_COLUMNS)].copy())
     y = cast(pd.Series, enriched["prioridad_recoleccion"].copy())

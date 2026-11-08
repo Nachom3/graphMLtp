@@ -44,8 +44,6 @@ NUMERIC_COLUMNS = [
     "historico_quejas_vecinales",
 ]
 
-MODEL_IDS = ("arbol", "logistica", "knn", "svc")
-
 # Small grids (issue #10: "grilla pequena" inside train only).
 PARAM_GRIDS: dict[str, dict[str, list[Any]]] = {
     "arbol": {
@@ -79,6 +77,45 @@ def _scaled_preprocessor() -> ColumnTransformer:
     )
 
 
+def _build_arbol(preprocessor: ColumnTransformer, seed: int):
+    return make_pipeline(
+        clone(preprocessor),
+        DecisionTreeClassifier(random_state=seed),
+    )
+
+
+def _build_logistica(preprocessor: ColumnTransformer, seed: int):
+    return make_pipeline(
+        _scaled_preprocessor(),
+        LogisticRegression(max_iter=2000, random_state=seed),
+    )
+
+
+def _build_knn(preprocessor: ColumnTransformer, seed: int):
+    return make_pipeline(
+        _scaled_preprocessor(),
+        KNeighborsClassifier(),
+    )
+
+
+def _build_svc(preprocessor: ColumnTransformer, seed: int):
+    return make_pipeline(
+        _scaled_preprocessor(),
+        SVC(kernel="rbf", random_state=seed),
+    )
+
+
+# Registry: adding a model registers a builder here instead of editing a chain.
+_BUILDERS = {
+    "arbol": _build_arbol,
+    "logistica": _build_logistica,
+    "knn": _build_knn,
+    "svc": _build_svc,
+}
+
+MODEL_IDS = tuple(_BUILDERS)
+
+
 def build_pipeline(model_id: str, preprocessor: ColumnTransformer, *, seed: int = 0):
     """Build the UNFITTED full pipeline for ``model_id``.
 
@@ -86,27 +123,11 @@ def build_pipeline(model_id: str, preprocessor: ColumnTransformer, *, seed: int 
     fitted here. Raises ``ValueError`` for unknown ids (API maps this to
     ``MODELO_DESCONOCIDO``).
     """
-    if model_id == "arbol":
-        return make_pipeline(
-            clone(preprocessor),
-            DecisionTreeClassifier(random_state=seed),
-        )
-    if model_id == "logistica":
-        return make_pipeline(
-            _scaled_preprocessor(),
-            LogisticRegression(max_iter=2000, random_state=seed),
-        )
-    if model_id == "knn":
-        return make_pipeline(
-            _scaled_preprocessor(),
-            KNeighborsClassifier(),
-        )
-    if model_id == "svc":
-        return make_pipeline(
-            _scaled_preprocessor(),
-            SVC(kernel="rbf", random_state=seed),
-        )
-    raise ValueError(f"unknown model_id: {model_id!r}")
+    try:
+        build = _BUILDERS[model_id]
+    except KeyError:
+        raise ValueError(f"unknown model_id: {model_id!r}") from None
+    return build(preprocessor, seed)
 
 
 def build_baseline_pipeline(preprocessor: ColumnTransformer):

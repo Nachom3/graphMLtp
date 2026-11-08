@@ -29,7 +29,9 @@ from .adapters.models.pipeline_store import (
     DEFAULT_PIPELINE_PATH,
     load_pipeline,
 )
+from .adapters.models.sklearn_evaluator import SklearnEvaluator
 from .adapters.models.sklearn_predictor import SklearnPredictor
+from .application.use_cases.compare_models.use_case import CompareModels
 from .application.use_cases.plan_route.use_case import PlanRoute
 from .application.use_cases.predict_priorities.use_case import PredictPriorities
 from .application.use_cases.validate_load_dataset.use_case import ValidateLoadDataset
@@ -52,9 +54,11 @@ def create_geometry_reader() -> GeoJsonGeometryReader:
     return GeoJsonGeometryReader()
 
 
-def create_compare_models_use_case():
-    """Template. TODO: implement."""
-    raise NotImplementedError
+def create_compare_models_use_case(
+    evaluator: SklearnEvaluator | None = None,
+) -> CompareModels:
+    """Wire model comparison to the sklearn adapter (no leakage, #10)."""
+    return CompareModels(evaluator or SklearnEvaluator())
 
 
 def create_predict_priorities_use_case(
