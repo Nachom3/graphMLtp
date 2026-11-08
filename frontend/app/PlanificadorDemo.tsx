@@ -10,7 +10,9 @@ import {
   type RoutePlanInput,
 } from "../features/route-planning/application/usecases";
 import { crearHttpGateway } from "../features/route-planning/infrastructure/httpGateway";
+import { Alert, AlertDescription } from "../components/ui/alert";
 import { MapView, toMapViewModel } from "../features/route-planning/components/map-view";
+import { ControlesRecorrido } from "../features/route-planning/components/playback";
 import { LeyendaPrioridades } from "../features/route-planning/components/priority-legend";
 import { ResumenRecorrido } from "../features/route-planning/components/route-summary";
 import type {
@@ -50,6 +52,8 @@ export default function PlanificadorDemo() {
   const [startNodeId, setStartNodeId] = useState("");
   const [steps, setSteps] = useState<RouteStep[]>([]);
   const [cost, setCost] = useState<RouteCost | null>(null);
+  const [pasoActual, setPasoActual] = useState(-1);
+  const [reproduciendo, setReproduciendo] = useState(false);
   const [loading, setLoading] = useState(true);
   const [planning, setPlanning] = useState(false);
   const [message, setMessage] = useState("Cargando el escenario y consultando el árbol…");
@@ -93,16 +97,25 @@ export default function PlanificadorDemo() {
     [priorities],
   );
   const mapModel = useMemo(() => {
-    if (!scenario || !cost) return null;
+    if (!scenario) return null;
     return toMapViewModel({
       tramos: scenario.segments,
       nodos: new Map(scenario.nodes.map((node) => [node.nodeId, { lat: node.lat, lon: node.lon }])),
       prioridades: priorities,
       pasos: steps,
-      mandatory: cost.mandatory,
-      transit: cost.transit,
+      pasoActual: pasoActual >= 0 ? pasoActual : undefined,
+      mandatory: cost?.mandatory,
+      transit: cost?.transit,
     });
-  }, [scenario, priorities, steps, cost]);
+  }, [scenario, priorities, steps, pasoActual, cost]);
+
+  // Reproducción del vehículo sobre la ruta, paso a paso. Al llegar al
+  // último paso no se agenda otro avance; el botón ofrece reiniciar.
+  useEffect(() => {
+    if (!reproduciendo || steps.length === 0 || pasoActual >= steps.length - 1) return;
+    const id = setTimeout(() => setPasoActual((a) => Math.min(a + 1, steps.length - 1)), 1200);
+    return () => clearTimeout(id);
+  }, [reproduciendo, pasoActual, steps.length]);
 
   function togglePriority(priority: Priority) {
     setInclude((current) =>
@@ -110,6 +123,8 @@ export default function PlanificadorDemo() {
     );
     setSteps([]);
     setCost(null);
+    setPasoActual(-1);
+    setReproduciendo(false);
   }
 
   async function plan() {
@@ -117,6 +132,8 @@ export default function PlanificadorDemo() {
     setPlanning(true);
     setSteps([]);
     setCost(null);
+    setPasoActual(-1);
+    setReproduciendo(false);
     const input: RoutePlanInput = {
       nodes: scenario.nodes,
       segments: scenario.segments,
@@ -153,9 +170,9 @@ export default function PlanificadorDemo() {
         </p>
       </header>
 
-      <p role="status" aria-live="polite" className="rounded-lg border border-zinc-200 bg-white p-4 text-sm text-zinc-700">
-        {message}
-      </p>
+      <Alert role="status" aria-live="polite" className="border-zinc-200">
+        <AlertDescription>{message}</AlertDescription>
+      </Alert>
 
       {scenario && (
         <>
@@ -166,10 +183,10 @@ export default function PlanificadorDemo() {
             </p>
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[34rem] text-left text-sm">
-                <thead><tr className="border-b text-zinc-500"><th className="py-2">Tramo</th><th>Zona</th><th>Contenedores</th><th>Prioridad del árbol</th></tr></thead>
+                <thead><tr className="border-b border-zinc-200 text-zinc-500"><th className="py-2">Tramo</th><th>Zona</th><th>Contenedores</th><th>Prioridad del árbol</th></tr></thead>
                 <tbody>
                   {scenario.segments.map((segment) => (
-                    <tr key={segment.segmentId} className="border-b last:border-0">
+                    <tr key={segment.segmentId} className="border-b border-zinc-200 last:border-0">
                       <td className="py-3 font-medium">{segment.segmentId}</td>
                       <td>{segment.zoneType}</td>
                       <td>{segment.containerCount}</td>
@@ -196,7 +213,7 @@ export default function PlanificadorDemo() {
             </fieldset>
             <label className="mt-5 flex max-w-sm flex-col gap-2 text-sm font-medium">
               Nodo de inicio
-              <select value={startNodeId} onChange={(event) => { setStartNodeId(event.target.value); setSteps([]); setCost(null); }} disabled={loading} className="rounded-md border border-zinc-300 bg-white px-3 py-2">
+              <select value={startNodeId} onChange={(event) => { setStartNodeId(event.target.value); setSteps([]); setCost(null); setPasoActual(-1); setReproduciendo(false); }} disabled={loading} className="rounded-md border border-zinc-300 bg-white px-3 py-2">
                 {scenario.nodes.map((node) => <option key={node.nodeId} value={node.nodeId}>{node.nodeId}</option>)}
               </select>
             </label>
@@ -205,13 +222,49 @@ export default function PlanificadorDemo() {
             </button>
           </section>
 
+          {scenario && mapModel && (
+            <section aria-labelledby="map-title" className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
+              <div className="p-6 pb-0">
+                <h2 id="map-title" className="text-xl font-semibold">Mapa del escenario</h2>
+                <p className="mt-1 text-sm text-zinc-600">
+                  {cost ? mapModel.resumen : `${scenario.segments.length} tramos · ${scenario.nodes.length} nodos. Al solicitar el circuito, el recorrido se dibuja acá.`}
+                </p>
+              </div>
+              <div className="p-6">
+                <div className="overflow-hidden rounded-lg border border-zinc-200">
+                  <MapView modelo={mapModel} />
+                </div>
+                <p className="mt-2 text-xs text-zinc-500">Mapa: © OpenStreetMap contributors.</p>
+              </div>
+            </section>
+          )}
+
           {cost && mapModel && (
             <section aria-labelledby="result-title" className="rounded-xl border border-zinc-200 bg-white p-6">
               <h2 id="result-title" className="text-xl font-semibold">3. Circuito devuelto por la API</h2>
               <ResumenRecorrido pasos={steps} costo={cost} />
               <LeyendaPrioridades />
               <p className="my-3 text-sm text-zinc-600">{mapModel.resumen}</p>
-              <MapView modelo={mapModel} />
+              {steps.length > 0 && (
+                <ControlesRecorrido
+                  total={steps.length}
+                  actual={pasoActual}
+                  reproduciendo={reproduciendo}
+                  tramoActual={pasoActual >= 0 ? steps[pasoActual]?.segmentId : undefined}
+                  alReiniciar={() => { setReproduciendo(false); setPasoActual(-1); }}
+                  alAnterior={() => { setReproduciendo(false); setPasoActual((a) => Math.max(0, a - 1)); }}
+                  alReproducirPausar={() => {
+                    if (reproduciendo) {
+                      setReproduciendo(false);
+                    } else {
+                      if (pasoActual >= steps.length - 1) setPasoActual(-1);
+                      setReproduciendo(true);
+                    }
+                  }}
+                  alSiguiente={() => { setReproduciendo(false); setPasoActual((a) => Math.min(a + 1, steps.length - 1)); }}
+                  alSaltar={(paso) => { setReproduciendo(false); setPasoActual(paso); }}
+                />
+              )}
             </section>
           )}
         </>

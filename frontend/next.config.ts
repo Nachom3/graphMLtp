@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* Configuración explícita mínima: el mapa Leaflet vive tras una
-     frontera de cliente (`dynamic ssr: false`), sin flags de build. */
+  /* Tailwind v4 vía Turbopack: sin esta regla `@import "tailwindcss"`
+     pasa sin procesar y ninguna utilidad se genera (página sin estilos). */
+  turbopack: {
+    rules: {
+      "*.css": {
+        loaders: [{ loader: "@tailwindcss/turbopack" }],
+      },
+    },
+  },
 };
 
 export default nextConfig;

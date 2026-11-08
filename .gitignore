@@ -4,3 +4,6 @@
 .venv/
 __pycache__/
 *.pyc
+
+# Artefacto offline del árbol (se genera con `npm run artifact`; no se versiona)
+backend/artifacts/

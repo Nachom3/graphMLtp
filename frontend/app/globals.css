@@ -49,31 +49,36 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --card: #171717;
-    --card-foreground: #ededed;
-    --popover: #171717;
-    --popover-foreground: #ededed;
-    --primary: #ededed;
-    --primary-foreground: #171717;
-    --secondary: #262626;
-    --secondary-foreground: #ededed;
-    --muted: #262626;
-    --muted-foreground: #a3a3a3;
-    --accent: #262626;
-    --accent-foreground: #ededed;
-    --destructive: #7f1d1d;
-    --border: #262626;
-    --input: #262626;
-    --ring: #737373;
-  }
-}
+/* Tema claro fijo: el diseño de la demo está calibrado en claro y las
+   tarjetas usan utilidades claras (bg-white). El modo oscuro del SO
+   invertía el fondo y rompía la legibilidad. */
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Leaflet necesita su CSS (importado en app/layout.tsx) más estos ajustes:
+   - Tailwind Preflight limita img a max-width:100%, lo que rompe las teselas.
+   - Los paneles de Leaflet usan z-index alto; se acota para no tapar la UI. */
+.leaflet-container {
+  z-index: 0;
+  font: inherit;
+}
+.leaflet-container img {
+  max-width: none !important;
+}
+
+/* Vehículo recolector: pin circular sin el estilo por defecto de Leaflet.
+   El camión es SVG en línea (estable en todos los navegadores, sin fuentes). */
+.marcador-vehiculo {
+  background: #047857;
+  border: 3px solid #ffffff;
+  border-radius: 9999px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.45);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
