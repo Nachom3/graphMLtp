@@ -67,6 +67,7 @@ export function ResumenRecorrido({
       <ol className="mt-3 flex max-h-72 flex-col gap-1 overflow-y-auto pr-1 text-sm">
         {pasos.map((paso) => {
           const activo = paso.order === pasoActual;
+          const yaPasado = pasoActual >= 0 && paso.order < pasoActual && !activo;
           return (
             <li key={paso.order}>
               <button
@@ -76,8 +77,10 @@ export function ResumenRecorrido({
                   "flex w-full items-center justify-between gap-2 rounded-md border px-3 py-1.5 text-left transition-colors",
                   activo
                     ? "border-emerald-600 bg-emerald-50 text-emerald-950"
-                    : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50",
-                  paso.repeated && !activo && "border-teal-200 bg-teal-50/60",
+                    : yaPasado
+                      ? "border-emerald-200 bg-emerald-50/60 text-emerald-950"
+                      : "border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50",
+                  paso.repeated && !activo && !yaPasado && "border-teal-200 bg-teal-50/60",
                 )}
                 aria-current={activo ? "step" : undefined}
               >

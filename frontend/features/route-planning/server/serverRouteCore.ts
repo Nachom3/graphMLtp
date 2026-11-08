@@ -3,8 +3,8 @@ import { cargarEscenario, RequestStore } from "../application/usecases";
 import { seleccionarAreaVisible, type LimitesMapa } from "../components/map-view/mapViewModel";
 import type { Priority, PriorityForSegment, RouteCost, RouteStep, Scenario } from "../domain/types";
 
-/** El límite protege el emparejamiento del cartero chino, no promete un tiempo máximo. */
-export const MAX_TRAMOS_SSR = 300;
+/** Tope anti-abuso solo para `override` por URL (largo de query), no para el área. */
+export const MAX_OVERRIDES_URL = 300;
 const PRIORIDADES = new Set<Priority>(["low", "medium", "high"]);
 
 export type ResultadoRecorridoSSR =
@@ -41,7 +41,7 @@ function leerParametros(params: URLSearchParams): Parametros {
   const startNodeId = unico(params, "start");
   if (startNodeId.length > 128) throw new Error("El nodo de inicio es inválido.");
   const entries = params.getAll("override");
-  if (entries.length > MAX_TRAMOS_SSR) throw new Error("Demasiadas prioridades modificadas.");
+  if (entries.length > MAX_OVERRIDES_URL) throw new Error("Demasiadas prioridades modificadas.");
   const overrides = new Map<string, Priority>();
   for (const entry of entries) {
     const parts = entry.split(":");
@@ -63,12 +63,11 @@ function mensajeError(error: unknown): string {
 export async function calcularRecorridoSSRConGateway(params: URLSearchParams, gateway: ApiGateway): Promise<ResultadoRecorridoSSR> {
   try {
     const { limites, include, startNodeId, overrides } = leerParametros(params);
-    const completo = await gateway.getScenario();
+    const completo = await gateway.getScenario({ bbox: limites });
     const validado = cargarEscenario(new RequestStore(), completo);
     if (validado.estado !== "exito") throw new Error("El escenario de la API no es válido.");
     const area = seleccionarAreaVisible(completo.nodes, completo.segments, limites);
     if (area.tramos.length === 0) throw new Error("No hay tramos en el área seleccionada.");
-    if (area.tramos.length > MAX_TRAMOS_SSR) throw new Error(`El área contiene ${area.tramos.length} tramos; acercá el mapa hasta un máximo de ${MAX_TRAMOS_SSR}.`);
     if (!area.nodos.some((n) => n.nodeId === startNodeId)) throw new Error("El nodo de inicio no pertenece al área seleccionada.");
     const sinGeometria = area.tramos.find((t) => !t.geometry || t.geometry.length < 2);
     if (sinGeometria) throw new Error(`El área contiene tramos sin geometría vial; no se puede renderizar el recorrido real. Tramo ${sinGeometria.segmentId} (${sinGeometria.originNode} → ${sinGeometria.destinationNode}).`);

@@ -4,13 +4,14 @@ import type { Priority } from "../../domain/types";
 import { LEYENDA_PRIORIDAD } from "./leyenda";
 
 /** Color usado en el mapa para cada prioridad (ver MapViewCliente). */
-const COLOR: Record<Priority | "transito" | "repetido" | "actual" | "seleccion" | "contenedor", string> = {
+const COLOR: Record<Priority | "transito" | "repetido" | "actual" | "recorrido" | "seleccion" | "contenedor", string> = {
   high: "#dc2626",
   medium: "#d97706",
   low: "#2563eb",
   transito: "#52525b",
   repetido: "#0f766e",
   actual: "#047857",
+  recorrido: "#16a34a",
   seleccion: "#7c3aed",
   contenedor: "#0ea5e9",
 };
@@ -114,6 +115,12 @@ export function LeyendaPrioridades() {
           <MuestraLinea color={COLOR.actual} grueso={5} />
           <span>
             <strong className="font-medium">Paso actual</strong> — verde esmeralda del camión
+          </span>
+        </li>
+        <li className="flex items-center gap-2">
+          <MuestraLinea color={COLOR.recorrido} grueso={5} />
+          <span>
+            <strong className="font-medium">Ya recorrido</strong> — verde del tramo anterior
           </span>
         </li>
         <li className="flex items-center gap-2">

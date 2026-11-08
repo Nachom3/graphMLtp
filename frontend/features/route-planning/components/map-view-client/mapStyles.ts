@@ -39,11 +39,11 @@ export function estilo(
   const fueraDeRuta = hayRecorrido && !t.enRecorrido;
   return {
     color: seleccionado && !t.esPasoActual ? "#7c3aed" : colorRol(t),
-    weight: seleccionado ? 10 : t.esPasoActual ? 9 : t.esRepetido ? 7 : t.esDestino ? 6 : 4,
+    weight: seleccionado ? 10 : t.esPasoActual ? 9 : t.yaRecorrido ? 7 : t.esRepetido ? 7 : t.esDestino ? 6 : 4,
     dashArray: t.esTransito
       ? "3 8"
       : undefined,
-    opacity: t.esPasoActual ? 1 : fueraDeRuta ? 0.22 : t.esRepetido ? 0.95 : 0.85,
+    opacity: t.esPasoActual ? 1 : fueraDeRuta ? 0.22 : t.yaRecorrido ? 0.95 : t.esRepetido ? 0.95 : 0.85,
     className: "cursor-pointer",
   };
 }
@@ -58,6 +58,7 @@ export function colorPrioridad(t: TramoVisible): string {
 /** Color por rol en el recorrido (modo recorrido). */
 export function colorRol(t: TramoVisible): string {
   if (t.esPasoActual) return "#047857";
+  if (t.yaRecorrido) return "#16a34a";
   if (t.esTransito) return "#52525b";
   return colorPrioridad(t);
 }

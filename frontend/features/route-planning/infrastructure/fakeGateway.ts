@@ -1,4 +1,4 @@
-import type { ApiGateway, RoutePlanInput } from "../application/usecases";
+import type { ApiGateway, OpcionesEscenario, RoutePlanInput } from "../application/usecases";
 import type {
   ContainerPoint,
   ModelId,
@@ -58,7 +58,7 @@ export class FakeGateway implements ApiGateway {
     return { status: "ok", version: "v1", schema: "v1" };
   }
 
-  async getScenario(signal?: AbortSignal): Promise<Scenario> {
+  async getScenario(_opts?: OpcionesEscenario, signal?: AbortSignal): Promise<Scenario> {
     await this.step(signal);
     return demoScenario;
   }

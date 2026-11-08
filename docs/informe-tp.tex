@@ -94,6 +94,14 @@ Verificado solo-lectura sobre el CSV:
 \end{itemize}
 Con \texttt{cont==0}, \texttt{quejas==0} forzado y \texttt{dias} ignorado, \texttt{score = zona\_w} $\rightarrow$ residencial $0\rightarrow$baja, industrial $1\rightarrow$media, comercial $2\rightarrow$media. \textbf{Es exactamente lo que aprendió el árbol en esa rama} (residencial$\rightarrow$baja, no-residencial$\rightarrow$media). El árbol entendió el dominio mejor que la fórmula: implementa gratis el invariante ``si no hay contenedor no hay pasada que contar''. Por eso no se toca código ni artefacto: cambiar la regla a \texttt{dias\_efectivo = dias if cont>0 else 0} deja 0/297 etiquetas iguales hoy, solo blinda futuro. Recomendación: una línea en doc (``\texttt{dias} es 0 por construcción cuando \texttt{cont} es 0'').
 
+\subsection{Implicancia directa: prioridad mínima con contenedores}
+De la fórmula se deduce sin entrenar nada:
+\begin{itemize}
+\item Si \texttt{cont$\geq$1} entonces \texttt{score$\geq$1} $\Rightarrow$ nunca \texttt{baja}: como mínimo \texttt{media} (1--2), o \texttt{alta} ($>$2) si hay días, zona comercial/industrial o quejas.
+\item Si \texttt{cont==0} entonces \texttt{quejas==0} y \texttt{score = 2*dias + zona\_w}. En el dataset actual además \texttt{dias==0} por invariante, así que \texttt{score = zona\_w}: residencial $\rightarrow$baja, industrial/comercial $\rightarrow$media. Con \texttt{dias$>$0} podría llegar a alta aun sin contenedores.
+\end{itemize}
+Consecuencia operativa: filtrar solo \texttt{low} casi siempre da selección vacía (``ningún tramo con contenedores en prioridades incluidas ['low']''), porque \texttt{baja} implica \texttt{cont==0} y el planificador exige \texttt{container\_count$>$0} para ser destino. La prioridad no es orden de visita (primero altas): solo define qué es obligatorio; el orden lo minimiza el cartero chino en metros.
+
 %----------------------------------------------------------------
 \section{Evaluación de modelos: por qué árboles}
 

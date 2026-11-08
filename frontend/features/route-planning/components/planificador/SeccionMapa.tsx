@@ -89,8 +89,8 @@ export function SeccionMapa() {
           Contenedores
           {v.mostrarContenedores && v.contenedoresTotal > 0 && (
             <span className="text-zinc-500">
-              ({v.contenedores.length}/{v.contenedoresTotal}
-              {v.contenedores.length < v.contenedoresTotal ? " trunc." : ""})
+              ({v.contenedores.length}/{v.contenedoresTotal} {v.modoMapa === "recorrido" && v.steps.length > 0 ? "en recorrido" : "en grafo"}
+              {v.contenedores.length < v.contenedoresTotal ? ", resto fuera" : ""})
             </span>
           )}
         </label>

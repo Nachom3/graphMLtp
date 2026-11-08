@@ -11,6 +11,7 @@ const ITEMS: Record<ModoMapa, { color: string; label: string; dashed?: boolean }
   ],
   recorrido: [
     { color: "#047857", label: "Paso actual" },
+    { color: "#16a34a", label: "Ya recorrido" },
     { color: "#0f766e", label: "Repetido" },
     { color: "#52525b", label: "Tránsito", dashed: true },
   ],

@@ -12,7 +12,7 @@ import {
   solicitarRecorrido,
   type ApiGateway,
 } from "../../application/usecases";
-import { seleccionarAreaVisible, toMapViewModel, type LimitesMapa, type MapViewModel } from "../map-view";
+import { filtrarContenedoresEnGrafo, seleccionarAreaVisible, toMapViewModel, type LimitesMapa, type MapViewModel } from "../map-view";
 import type {
   ContainerPoint,
   Node,
@@ -27,7 +27,7 @@ import type {
 import {
   BARRIO_DEFAULT,
   errorText,
-  MAX_TRAMOS_CALCULO,
+  LIMITE_TRAMOS_ESCENARIO,
   MAX_TRAMOS_PREDICCION,
   PRIORITIES,
   TRAMOS_POR_PAGINA,
@@ -142,7 +142,10 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
   useEffect(() => {
     let active = true;
     async function load() {
-      const loaded = await obtenerEscenario(gateway, new RequestStore());
+      const loaded = await obtenerEscenario(gateway, new RequestStore(), undefined, {
+        bbox: BARRIO_DEFAULT,
+        limit: LIMITE_TRAMOS_ESCENARIO,
+      });
       if (!active) return;
       if (loaded.estado !== "exito") {
         setLoading(false);
@@ -189,7 +192,10 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
           return;
         }
         setPriorities(predicted.datos);
-        setMessage("Escenario cargado y prioridades calculadas por el árbol.");
+        const recorte = valid.datos.truncated
+          ? ` Recorte: ${valid.datos.segments.length} de ${valid.datos.total ?? "?"} tramos del área pedida.`
+          : "";
+        setMessage(`Escenario cargado y prioridades calculadas por el árbol.${recorte}`);
       } else {
         setMessage(
           `Escenario grande (${valid.datos.segments.length} tramos): acercá el mapa para predecir y colorear el área visible.`,
@@ -211,8 +217,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     [scenario, limites],
   );
   // Evita decenas de miles de <option> mientras la vista es demasiado amplia.
-  const iniciosDisponibles = areaVisible && areaVisible.tramos.length <= MAX_TRAMOS_CALCULO
-    ? areaVisible.nodos : [];
+  const iniciosDisponibles = areaVisible ? areaVisible.nodos : [];
   const inicioVisible = iniciosDisponibles.some((n) => n.nodeId === startNodeId)
     ? startNodeId : iniciosDisponibles[0]?.nodeId ?? "";
   const mapModel = useMemo(() => {
@@ -329,6 +334,31 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     return () => clearTimeout(id);
   }, [reproduciendo, pasoActual, steps.length]);
 
+  // SOLO contenedores dentro del grafo modelado: el backend devuelve por bbox
+  // (ventana visible) y eso incluye puntos fuera de la red vial que confunden.
+  // Se filtran a <=25 m de algún tramo del área modelada (mismo radio del builder).
+  // En modo recorrido se recorta además a los tramos obligatorios: los que están
+  // en el grafo pero fuera del circuito el camión no los recoge y no se muestran.
+  const contenedoresEnGrafo = useMemo(() => {
+    const tramosBase = areaVisible?.tramos ?? scenario?.segments ?? [];
+    if (tramosBase.length === 0 || contenedores.length === 0) return [];
+    const nodos = new Map(
+      (areaVisible?.nodos ?? scenario?.nodes ?? []).map((n) => [
+        n.nodeId,
+        { lat: n.lat, lon: n.lon },
+      ]),
+    );
+    const enGrafo = filtrarContenedoresEnGrafo({ contenedores, tramos: tramosBase, nodos });
+    if (modoMapa !== "recorrido" || steps.length === 0) return enGrafo;
+    const idsObligatorios = cost?.mandatory?.length
+      ? new Set(cost.mandatory)
+      : new Set(steps.map((s) => s.segmentId));
+    if (idsObligatorios.size === 0) return enGrafo;
+    const tramosObligatorios = tramosBase.filter((t) => idsObligatorios.has(t.segmentId));
+    if (tramosObligatorios.length === 0) return [];
+    return filtrarContenedoresEnGrafo({ contenedores: enGrafo, tramos: tramosObligatorios, nodos });
+  }, [contenedores, areaVisible, scenario, modoMapa, steps, cost]);
+
   function resetRouteView() {
     setSteps([]);
     setCost(null);
@@ -368,7 +398,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
   }
 
   function plan() {
-    if (!scenario || !areaVisible || !limites || !inicioVisible || include.length === 0 || areaVisible.tramos.length > MAX_TRAMOS_CALCULO) return;
+    if (!scenario || !areaVisible || !limites || !inicioVisible || include.length === 0) return;
     if (priorities.length === 0) return;
     setPlanning(true);
     setMessage("Calculando el circuito en esta zona…");
@@ -411,7 +441,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     });
   }
 
-  const puedePlanificar = !(loading || planning || priorities.length === 0 || include.length === 0 || !inicioVisible || !areaVisible || areaVisible.tramos.length > MAX_TRAMOS_CALCULO);
+  const puedePlanificar = !(loading || planning || priorities.length === 0 || include.length === 0 || !inicioVisible || !areaVisible);
   const puedeFijar = !!areaVisible && areaVisible.tramos.length > 0;
   const areaTramos = areaVisible ? areaVisible.tramos.length : null;
   const deshabilitado = loading || planning;
@@ -506,7 +536,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     revisionVisible, busquedaTramo, steps, revisionRuta, cost,
     pasoActual, reproduciendo, loading, planning, message,
     tramoSeleccionadoId, explicacion, explicacionNota,
-    soloTramosVisibles, mostrarContenedores, contenedores, contenedoresTotal,
+    soloTramosVisibles, mostrarContenedores, contenedores: contenedoresEnGrafo, contenedoresTotal,
     modoMapa,
     priorityBySegment, areaVisible, iniciosDisponibles, inicioVisible,
     mapModel, tramosFiltrados, totalPaginas, paginaVisible,

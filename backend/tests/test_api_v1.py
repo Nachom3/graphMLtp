@@ -216,3 +216,43 @@ def test_plan_reports_disconnected_full_graph_as_impossible_route():
     )
     assert response.status_code == 422
     assert response.json()["detail"]["code"] == "IMPOSSIBLE_ROUTE"
+
+
+def test_scenario_supports_limit_and_bbox_slice():
+    client = client_with()
+    full = client.get("/scenario")
+    assert full.status_code == 200, full.text
+    assert full.json()["total"] == 12
+    assert full.json()["truncated"] is False
+    assert len(full.json()["segments"]) == 12
+
+    limited = client.get("/scenario", params={"limit": 2})
+    assert limited.status_code == 200, limited.text
+    body = limited.json()
+    assert [s["segment_id"] for s in body["segments"]] == ["T0001", "T0002"]
+    assert body["total"] == 12
+    assert body["truncated"] is True
+
+    west = client.get(
+        "/scenario",
+        params={"sur": -34.9105, "norte": -34.9095, "oeste": -56.1555, "este": -56.1545},
+    )
+    assert west.status_code == 200, west.text
+    ids = [s["segment_id"] for s in west.json()["segments"]]
+    assert 0 < len(ids) < 12
+    assert "T0002" not in ids
+
+    bad = client.get("/scenario", params={"sur": -34.90, "norte": -34.91, "oeste": -56.15, "este": -56.14})
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["code"] == "INVALID_REQUEST"
+
+    incomplete = client.get("/scenario", params={"sur": -34.91})
+    assert incomplete.status_code == 422
+    assert incomplete.json()["detail"]["code"] == "INVALID_REQUEST"
+
+
+def test_scenario_rejects_limit_above_configured_max(monkeypatch):
+    monkeypatch.setenv("COLLECTION_SCENARIO_MAX_LIMIT", "1")
+    response = client_with().get("/scenario", params={"limit": 2})
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "INVALID_REQUEST"
