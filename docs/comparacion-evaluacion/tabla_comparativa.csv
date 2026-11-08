@@ -1,0 +1,7 @@
+modelo,cv_acc_media,cv_acc_std,cv_f1_media,cv_f1_std,best_params,test_acc,test_f1_macro,test_precision_macro,test_recall_macro,n_train,n_test,fold1_acc,fold1_f1,fold2_acc,fold2_f1,fold3_acc,fold3_f1,fold4_acc,fold4_f1,fold5_acc,fold5_f1
+regla_exacta,1.0,0.0,1.0,0.0,"""sin ajuste (es la función que construye la etiqueta)""",1.0,1.0,1.0,1.0,237,60,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0
+dummy_mayoria,0.4346,0.0081,0.2019,0.0026,"{""strategy"": ""most_frequent""}",0.4333,0.2016,0.1444,0.3333,237,60,0.4375,0.2029,0.4375,0.2029,0.4255,0.199,0.4255,0.199,0.4468,0.2059
+arbol,0.9916,0.0103,0.9898,0.0125,"{""decisiontreeclassifier__max_depth"": null, ""decisiontreeclassifier__min_samples_split"": 2}",0.9833,0.98,0.9833,0.9778,237,60,0.9792,0.9748,1.0,1.0,1.0,1.0,1.0,1.0,0.9787,0.9743
+logistica,0.9749,0.0243,0.9695,0.0301,"{""logisticregression__C"": 2.0}",1.0,1.0,1.0,1.0,237,60,0.9583,0.95,0.9375,0.9221,1.0,1.0,0.9787,0.9752,1.0,1.0
+knn,0.9957,0.0085,0.995,0.0099,"{""kneighborsclassifier__n_neighbors"": 3}",1.0,1.0,1.0,1.0,237,60,1.0,1.0,1.0,1.0,1.0,1.0,0.9787,0.9752,1.0,1.0
+svc,0.9789,0.0188,0.9753,0.0221,"{""svc__C"": 0.5}",0.9333,0.9216,0.9298,0.9298,237,60,0.9583,0.9505,1.0,1.0,0.9787,0.9752,0.9574,0.9505,1.0,1.0
