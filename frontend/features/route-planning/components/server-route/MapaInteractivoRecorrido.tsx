@@ -68,7 +68,7 @@ export function MapaInteractivoRecorrido({
       </button>
       {visible && (
         <div className="mt-4">
-          <MapView modelo={modelo} />
+          <MapView modelo={modelo} modoMapa="recorrido" />
           {steps.length > 0 && (
             <div className="mt-4">
               <ControlesRecorrido

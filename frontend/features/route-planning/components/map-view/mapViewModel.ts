@@ -9,6 +9,8 @@ export interface TramoVisible {
   prioridad: Priority | "unknown";
   patron: string;
   esPasoActual: boolean;
+  /** Ya lo transitó el camión (pasos anteriores al actual). Queda en verde. */
+  yaRecorrido: boolean;
   esDestino: boolean;
   esTransito: boolean;
   /** Aparece al menos una vez en el circuito. */
@@ -207,6 +209,7 @@ export function toMapViewModel(args: {
   const pasoActual = args.pasoActual ?? -1;
   const actualId = args.pasos[pasoActual]?.segmentId;
   const puntosPasoActual = orientados.get(pasoActual)?.puntos;
+  const previos = new Set(args.pasos.slice(0, Math.max(pasoActual, 0)).map((p) => p.segmentId));
 
   const tramos: TramoVisible[] = args.tramos.map((t) => {
     const prioridad = pri.get(t.segmentId) ?? "unknown";
@@ -220,6 +223,7 @@ export function toMapViewModel(args: {
       prioridad,
       patron: PATRON[prioridad],
       esPasoActual,
+      yaRecorrido: previos.has(t.segmentId),
       esDestino: mandatory.has(t.segmentId),
       esTransito: transit.has(t.segmentId),
       enRecorrido: repeticiones > 0,

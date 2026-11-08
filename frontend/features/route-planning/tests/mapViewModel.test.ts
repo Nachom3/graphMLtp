@@ -27,6 +27,9 @@ describe("mapViewModel: puro, sin Leaflet ni DOM", () => {
     expect(t0001.esRepetido).toBe(true);
     expect(t0001.enRecorrido).toBe(true);
     expect(t0001.esPasoActual).toBe(true);
+    expect(t0001.yaRecorrido).toBe(true);
+    expect(vm.tramos.find((t) => t.segmentId === "T0002")!.yaRecorrido).toBe(true);
+    expect(vm.tramos.find((t) => t.segmentId === "T0003")!.yaRecorrido).toBe(false);
     expect(t0001.puntosOrientados?.length).toBe(2);
     expect(vm.tramos.find((t) => t.segmentId === "T0002")!.repeticiones).toBe(1);
     const transit = vm.tramos.find((t) => t.segmentId === "T0003")!;
@@ -36,6 +39,38 @@ describe("mapViewModel: puro, sin Leaflet ni DOM", () => {
     expect(t0001.ordenes).toEqual([0, 2]);
     expect(vm.hayRecorrido).toBe(true);
     expect(vm.nodos.some((n) => n.esInicio && n.nodeId === "N0001")).toBe(true);
+  });
+
+  it("marca yaRecorrido solo con pasos anteriores y lo achica al retroceder", () => {
+    const sinEmpezar = toMapViewModel({
+      tramos: scenarioFixture.segments,
+      nodos,
+      prioridades,
+      pasos,
+      startNodeId: "N0001",
+    });
+    expect(sinEmpezar.tramos.every((t) => t.yaRecorrido === false)).toBe(true);
+    const alFinal = toMapViewModel({
+      tramos: scenarioFixture.segments,
+      nodos,
+      prioridades,
+      pasos,
+      pasoActual: 3,
+      startNodeId: "N0001",
+    });
+    expect(alFinal.tramos.find((t) => t.segmentId === "T0001")!.yaRecorrido).toBe(true);
+    expect(alFinal.tramos.find((t) => t.segmentId === "T0002")!.yaRecorrido).toBe(true);
+    const alRetroceder = toMapViewModel({
+      tramos: scenarioFixture.segments,
+      nodos,
+      prioridades,
+      pasos,
+      pasoActual: 1,
+      startNodeId: "N0001",
+    });
+    expect(alRetroceder.tramos.find((t) => t.segmentId === "T0001")!.yaRecorrido).toBe(true);
+    expect(alRetroceder.tramos.find((t) => t.segmentId === "T0002")!.yaRecorrido).toBe(false);
+    expect(alRetroceder.tramos.find((t) => t.segmentId === "T0003")!.yaRecorrido).toBe(false);
   });
 
   it("resumen textual menciona repetidos y no depende del mapa", () => {

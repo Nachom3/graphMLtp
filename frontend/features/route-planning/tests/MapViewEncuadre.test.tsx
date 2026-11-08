@@ -81,6 +81,7 @@ function tramo(segmentId: string): TramoVisible {
     prioridad: "high",
     patron: "gruesa sólida",
     esPasoActual: false,
+    yaRecorrido: false,
     esDestino: false,
     esTransito: false,
     enRecorrido: false,
