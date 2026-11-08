@@ -21,15 +21,15 @@ python -m pytest backend/tests/ -q
 python -m pytest --nbval-lax notebooks/12_arquitectura_backend.ipynb -q
 ```
 
-## Demostración reproducible: preparación → comparación → predicción
+## Demostración reproducible: preparación → predicción (solo `arbol`)
 
-El script `scripts/train_compare.py` usa la preparación #18 tal cual y
-compara `arbol` vs `logistica` con la misma metodología (CV solo en train,
-grilla chica, contraste en validación, test un solo uso). El notebook
-`notebooks/10_entrenamiento_modelos.ipynb` llama al mismo código.
+La comparación de modelos vive en los notebooks con código sklearn propio
+(`notebooks/10_entrenamiento_modelos.ipynb` y
+`notebooks/comparacion_evaluacion.ipynb`): el backend no compara, no
+optimiza hiperparámetros y no entrena a pedido; solo sirve el árbol ya
+elegido.
 
 ```bash
-python scripts/train_compare.py
 python -m pytest --nbval-lax notebooks/10_entrenamiento_modelos.ipynb -q
 ```
 

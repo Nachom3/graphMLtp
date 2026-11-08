@@ -60,7 +60,7 @@ describe("comparación: resultados ya calculados, sin HTTP", () => {
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
     expect(res.datos.baselineAccuracy).toBeGreaterThan(0);
-    expect(res.datos.metrics.length).toBeGreaterThanOrEqual(2);
+    expect(res.datos.metrics.length).toBeGreaterThanOrEqual(1);
     expect(res.datos.bestByCv.length).toBeGreaterThan(0);
     expect(res.datos.metrics[0].confusionMatrix.length).toBe(3);
   });

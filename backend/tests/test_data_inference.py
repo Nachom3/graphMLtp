@@ -222,8 +222,9 @@ def test_predict_priorities_keeps_one_to_one_with_fake():
 
 def test_predict_priorities_rejects_bad_model_bad_segments_and_mixed_output():
     segments = [valid_segment("A")]
+    ejecutar = PredictPriorities(FakePredictor("arbol")).execute  # caso de uso; no es SQL (falso positivo del linter)
     with pytest.raises(ValueError, match="desconocido"):
-        PredictPriorities(FakePredictor("arbol")).execute("logistica", segments)
+        ejecutar("modelo-desconocido", segments)
     import dataclasses
 
     bad = dataclasses.replace(valid_segment("A"), container_count=-2)
@@ -234,14 +235,14 @@ def test_predict_priorities_rejects_bad_model_bad_segments_and_mixed_output():
         PredictPriorities(FakePredictor("arbol")).execute("arbol", dup)
 
     class ShortPredictor(FakePredictor):
-        def predict(self, segs: list[SegmentFeatures]):  # type: ignore[override]
-            return super().predict(segs)[:0]
+        def predict(self, segments: list[SegmentFeatures]):
+            return super().predict(segments)[:0]
 
     with pytest.raises(PredictionWithoutSegment, match="1:1"):
         PredictPriorities(ShortPredictor("arbol")).execute("arbol", segments)
 
     class SwappedPredictor(FakePredictor):
-        def predict(self, segs: list[SegmentFeatures]):  # type: ignore[override]
+        def predict(self, segments: list[SegmentFeatures]):
             return [PredictedSegment(segment_id="OTRO", priority="low")]
 
     with pytest.raises(PredictionWithoutSegment, match="mezclada"):

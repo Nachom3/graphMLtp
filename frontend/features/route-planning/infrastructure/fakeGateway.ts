@@ -69,7 +69,7 @@ export class FakeGateway implements ApiGateway {
     signal?: AbortSignal,
   ): Promise<PriorityForSegment[]> {
     await this.step(signal);
-    const supported = this.options.supportedModels ?? ["arbol", "logistica", "rule-v1"];
+    const supported = this.options.supportedModels ?? ["arbol"];
     if (!supported.includes(modelId)) {
       throw { code: "backend", detail: `modelo no soportado en fake: ${modelId}` } satisfies OperationError;
     }

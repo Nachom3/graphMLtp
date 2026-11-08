@@ -74,18 +74,18 @@ describe("httpGateway: backend en inglés, único lugar con fetch", () => {
     expect(res).toEqual([{ segmentId: "T0001", priority: "low" }]);
   });
 
-  it("rule-v1 funciona sin filas (arreglo vacío)", async () => {
+  it("arbol funciona sin filas de entrenamiento", async () => {
     mockFetchOnce((_url, init) => {
       const body = JSON.parse(String(init?.body));
-      expect(body.model_id).toBe("rule-v1");
+      expect(body.model_id).toBe("arbol");
       expect(body).not.toHaveProperty("training_rows");
       return jsonRes({
-        model_id: "rule-v1",
+        model_id: "arbol",
         predictions: [{ segment_id: "T0001", priority: "low" }],
       });
     });
     const gw = crearHttpGateway("http://test");
-    const res = await gw.predictPriorities("rule-v1", [scenarioFixture.segments[0]]);
+    const res = await gw.predictPriorities("arbol", [scenarioFixture.segments[0]]);
     expect(res).toEqual([{ segmentId: "T0001", priority: "low" }]);
   });
 

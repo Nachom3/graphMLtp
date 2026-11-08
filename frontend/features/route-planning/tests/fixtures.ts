@@ -65,8 +65,8 @@ export const planInputFixture: PlanInput = {
 };
 
 /**
- * Filas de entrenamiento (backend: training rows).
- * `arbol`/`logistica` las exigen; `rule-v1` acepta `[]`.
+ * Filas de entrenamiento (referencia offline de la comparación;
+ * el frontend no las envía: la API solo sirve `arbol` ya ajustado).
  */
 export const trainingRowsFixture: TrainingRow[] = [
   {
@@ -96,20 +96,6 @@ export const comparisonFixture: ModelComparison = {
       f1Macro: 0.87,
       confusionMatrix: [
         [10, 1, 0],
-        [1, 9, 1],
-        [0, 1, 10],
-      ],
-      nTrain: 9,
-      nTest: 3,
-    },
-    {
-      modelId: "logistica",
-      accuracy: 0.85,
-      precisionMacro: 0.84,
-      recallMacro: 0.83,
-      f1Macro: 0.83,
-      confusionMatrix: [
-        [9, 1, 1],
         [1, 9, 1],
         [0, 1, 10],
       ],

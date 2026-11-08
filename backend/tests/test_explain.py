@@ -94,7 +94,7 @@ def test_explain_rejects_non_tree_estimators():
         steps=[("pre", FakePreprocessor()), ("est", SimpleNamespace())],
         predict=lambda frame: ["media"] * len(frame),
     )
-    predictor = SklearnPredictor("logistica", pipe)
+    predictor = SklearnPredictor("arbol", pipe)
     try:
         predictor.explain(entity())
     except ValueError as exc:
@@ -134,14 +134,14 @@ def test_explain_endpoint_returns_path():
 
 def test_explain_endpoint_maps_unknown_and_unsupported_models():
     unknown = client_with_explainer(Explainer()).post(
-        "/predictions:explain", json={"model_id": "knn", "segment": segment_dict()}
+        "/predictions:explain", json={"model_id": "modelo-desconocido", "segment": segment_dict()}
     )
     assert unknown.status_code == 422
     assert unknown.json()["detail"]["code"] == "MODEL_UNKNOWN"
 
     class NoTree:
         def explain(self, model_id, segment):
-            raise ValueError("explicación no disponible: LogisticRegression no es un árbol")
+            raise ValueError("explicación no disponible: FakeEstimator no es un árbol")
 
     unsupported = client_with_explainer(NoTree()).post(
         "/predictions:explain", json={"model_id": "arbol", "segment": segment_dict()}

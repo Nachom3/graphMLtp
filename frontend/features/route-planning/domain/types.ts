@@ -15,10 +15,10 @@ export type SegmentId = string;
 export type NodeId = string;
 
 /**
- * Modelos del backend. `rule-v1` es el único default concreto;
- * `arbol`/`logistica` son placeholders hasta que el #10 agregue reales.
+ * Modelo del backend. Solo `arbol` (elegido en los notebooks por
+ * comparacion offline); el backend no sirve otros modelos.
  */
-export type ModelId = "arbol" | "logistica" | "rule-v1";
+export type ModelId = "arbol";
 
 export interface Node {
   nodeId: NodeId;

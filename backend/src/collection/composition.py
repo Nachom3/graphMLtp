@@ -3,10 +3,10 @@
 Explicit wiring with no business logic. Domain/application never import
 pandas, sklearn or FastAPI; every scientific object is built here.
 
-Issue #27 scope: only the dataset and prediction paths are wired. The
-compare-models and plan-route factories stay templates on purpose — the
-former keeps its #10 wiring outside this root and the latter belongs to
-the parallel issue #28, so this file does not touch them.
+Arbol-only scope: the backend wires the dataset, prediction (fitted
+``arbol`` artifact) and route-planning paths. Model comparison lives in
+the notebooks with their own sklearn code, so this root wires no
+comparison use case.
 
 Inference never trains: ``create_predict_priorities_use_case`` wraps an
 already-FITTED pipeline (injected directly in tests, or loaded from the
@@ -29,9 +29,7 @@ from .adapters.models.pipeline_store import (
     DEFAULT_PIPELINE_PATH,
     load_pipeline,
 )
-from .adapters.models.sklearn_evaluator import SklearnEvaluator
 from .adapters.models.sklearn_predictor import SklearnPredictor
-from .application.use_cases.compare_models.use_case import CompareModels
 from .application.use_cases.plan_route.use_case import PlanRoute
 from .application.use_cases.predict_priorities.use_case import PredictPriorities
 from .application.use_cases.validate_load_dataset.use_case import ValidateLoadDataset
@@ -52,13 +50,6 @@ def create_container_reader() -> FileContainerStore:
 def create_geometry_reader() -> GeoJsonGeometryReader:
     """Wire road geometry to the GeoJSON sidecar reader."""
     return GeoJsonGeometryReader()
-
-
-def create_compare_models_use_case(
-    evaluator: SklearnEvaluator | None = None,
-) -> CompareModels:
-    """Wire model comparison to the sklearn adapter (no leakage, #10)."""
-    return CompareModels(evaluator or SklearnEvaluator())
 
 
 def create_predict_priorities_use_case(
