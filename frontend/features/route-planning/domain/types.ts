@@ -178,9 +178,3 @@ export function conRepeticiones(segmentIds: SegmentId[]): RouteStep[] {
   });
 }
 
-/** Leyenda accesible: etiqueta + patrón, nunca solo color. */
-export const LEYENDA_PRIORIDAD: Record<Priority, { etiqueta: string; patron: string }> = {
-  high: { etiqueta: "Alta", patron: "línea gruesa sólida" },
-  medium: { etiqueta: "Media", patron: "línea media rayada" },
-  low: { etiqueta: "Baja", patron: "línea fina punteada" },
-};

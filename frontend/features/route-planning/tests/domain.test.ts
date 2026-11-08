@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  LEYENDA_PRIORIDAD,
-  conRepeticiones,
-  type SegmentId,
-} from "../domain/types";
+import { conRepeticiones, type SegmentId } from "../domain/types";
+import { LEYENDA_PRIORIDAD } from "../components/priority-legend/leyenda";
 import { repeatedRouteIds } from "./fixtures";
 
 describe("conRepeticiones: conserva orden y duplicados (no deduplica)", () => {

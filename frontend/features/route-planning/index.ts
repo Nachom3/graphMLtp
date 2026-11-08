@@ -14,7 +14,8 @@ export type { ApiGateway } from "./application/usecases";
 export { FakeGateway } from "./infrastructure/fakeGateway";
 export type { FakeOptions } from "./infrastructure/fakeGateway";
 export { crearHttpGateway } from "./infrastructure/httpGateway";
-export { conRepeticiones, LEYENDA_PRIORIDAD } from "./domain/types";
+export { conRepeticiones } from "./domain/types";
+export { LEYENDA_PRIORIDAD } from "./components/priority-legend/leyenda";
 export type {
   ErrorCode,
   ModelComparison,

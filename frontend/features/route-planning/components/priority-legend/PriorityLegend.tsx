@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { LEYENDA_PRIORIDAD, type Priority } from "../../domain/types";
+import type { Priority } from "../../domain/types";
+import { LEYENDA_PRIORIDAD } from "./leyenda";
 
 /** Color usado en el mapa para cada prioridad (ver MapViewCliente). */
 const COLOR: Record<Priority | "transito" | "repetido" | "actual" | "seleccion", string> = {
