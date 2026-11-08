@@ -241,7 +241,6 @@ class NetworkxRoutePlanner:
                 f"prioridades incluidas {sorted(include)}"
             )
         full_graph = _build_full_multigraph(nodes, segments)
-        start = segment_by_id[mandatory[0]].origin_node
         required_ids, _ = _connect_components(full_graph, mandatory, segment_by_id)
         required_graph: nx.MultiGraph = nx.MultiGraph()
         for segment_id in required_ids:
@@ -256,6 +255,13 @@ class NetworkxRoutePlanner:
             )
         if not nx.is_connected(required_graph):
             raise ImpossibleRoute("red elegida desconexa")
+        start = config.start_node_id
+        if start is None:
+            start = segment_by_id[mandatory[0]].origin_node
+        elif start not in required_graph:
+            raise ImpossibleRoute(
+                f"nodo de inicio {start!r} inaccesible desde la ruta elegida"
+            )
         odd = [node for node, degree in required_graph.degree() if degree % 2 == 1]
         euler_graph = required_graph.copy()
         if odd:

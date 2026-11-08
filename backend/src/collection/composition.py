@@ -21,12 +21,14 @@ from pathlib import Path
 from typing import Any
 
 from .adapters.datasets.csv_dataset_reader import CsvDatasetReader
+from .adapters.graphs.networkx_route_planner import NetworkxRoutePlanner
 from .adapters.models.pipeline_store import (
     DEFAULT_MODEL_ID,
     DEFAULT_PIPELINE_PATH,
     load_pipeline,
 )
 from .adapters.models.sklearn_predictor import SklearnPredictor
+from .application.use_cases.plan_route.use_case import PlanRoute
 from .application.use_cases.predict_priorities.use_case import PredictPriorities
 from .application.use_cases.validate_load_dataset.use_case import ValidateLoadDataset
 
@@ -67,6 +69,11 @@ def create_predict_priorities_use_case(
     return PredictPriorities(SklearnPredictor(model_id, fitted))
 
 
-def create_plan_route_use_case():
-    """Template. TODO: implement."""
-    raise NotImplementedError
+def create_plan_route_use_case() -> PlanRoute:
+    """Wire route planning to the production NetworkX adapter."""
+    return PlanRoute(NetworkxRoutePlanner())
+
+
+def pilot_scenario_source() -> Path:
+    """Return the bundled pilot fixture directory used by the API by default."""
+    return Path(__file__).resolve().parents[2] / "tests" / "fixtures"

@@ -30,7 +30,11 @@ class PlanRoute(PlanRouteContract):
         priorities: list[PredictedSegment],
         config: RouteConfig,
     ) -> Route:
-        """Filter container==0 out of destinations, keep full graph, delegate."""
+        """Filter container==0 out of destinations, keep full graph, delegate.
+
+        ``config.start_node_id`` is passed unchanged for the planner to use as
+        the Eulerian circuit source when it belongs to the connected route.
+        """
         segment_by_id = {segment.segment_id: segment for segment in segments}
         include = set(config.include)
         # Filtered priorities: only ids with containers; unknown ids ignored

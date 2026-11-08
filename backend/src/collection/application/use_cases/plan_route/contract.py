@@ -24,7 +24,8 @@ class PlanRouteContract(ABC):
         """Plan a closed circuit; never mutates inputs.
 
         Raises ``ImpossibleRoute`` when no destination remains after the
-        container>0 + include filter, or when the planner reports no
-        connection through the full graph.
+        container>0 + include filter, when the planner reports no connection
+        through the full graph, or when the configured start node cannot be
+        used as the source of the closed circuit.
         """
         raise NotImplementedError
