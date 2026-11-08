@@ -1,9 +1,8 @@
 /**
- * Planificador: composición del store con las secciones.
+ * Planificador: sidebar scrolleable (izq.) + mapa grande fijo (der.).
  *
- * Todo el estado y efectos viven en PlanificadorProvider; este archivo
- * solo ordena header, alerta, panel, mapa, costo y tabla. Recibe el puerto
- * ApiGateway, nunca la infraestructura.
+ * En desktop el mapa queda a la vista mientras leés filtros, costo y tabla.
+ * En mobile el mapa va arriba sticky y el resto scrollea debajo.
  */
 "use client";
 
@@ -12,12 +11,13 @@ import type { ApiGateway } from "../../application/usecases";
 import { PanelFiltros } from "./PanelFiltros";
 import { SeccionCosto } from "./SeccionCosto";
 import { SeccionMapa } from "./SeccionMapa";
+import { SidebarInfo } from "./SidebarInfo";
 import { TablaTramos } from "./TablaTramos";
 import { PlanificadorProvider, usePlanificador } from "./store";
 
 function TiritaPasos() {
   return (
-    <ol className="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Pasos de la demo">
+    <ol className="mt-3 flex flex-wrap gap-2 text-sm" aria-label="Pasos de la demo">
       {[
         { n: "1", t: "Mirar prioridades" },
         { n: "2", t: "Simular circuito" },
@@ -41,72 +41,80 @@ function TiritaPasos() {
 function Contenido() {
   const v = usePlanificador();
   return (
-    <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
-      <header className="max-w-3xl">
-        <p className="text-sm font-medium uppercase tracking-wide text-emerald-700">
-          Demo de planificación
-        </p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-900">
-          Planificá un circuito de recolección
-        </h1>
-        <p className="mt-3 text-zinc-600">
-          El árbol colorea cada tramo por prioridad. Simulá el circuito en esta zona y miralo paso a
-          paso en el mismo mapa, con contenedores e inicio marcados.
-        </p>
-        <TiritaPasos />
-      </header>
+    <main className="flex min-h-[100dvh] w-full flex-1 flex-col lg:h-[100dvh] lg:max-h-[100dvh] lg:flex-row lg:overflow-hidden">
+      {/* Sidebar: scrollea solo; el mapa no se va */}
+      <aside className="order-2 flex w-full shrink-0 flex-col gap-4 border-zinc-200 bg-zinc-50 px-4 py-5 sm:px-5 lg:order-1 lg:h-full lg:w-[400px] lg:overflow-y-auto lg:border-r xl:w-[440px]">
+        <header>
+          <p className="text-sm font-medium uppercase tracking-wide text-emerald-700">
+            Demo de planificación
+          </p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">
+            Circuito de recolección
+          </h1>
+          <p className="mt-2 text-sm text-zinc-600">
+            El árbol colorea prioridades. Simulá acá y mirá el recorrido en el mapa sin perderlo al
+            scrollear.
+          </p>
+          <TiritaPasos />
+        </header>
 
-      <Alert role="status" aria-live="polite" className="border-zinc-200">
-        <AlertDescription>{v.message}</AlertDescription>
-      </Alert>
+        <Alert role="status" aria-live="polite" className="border-zinc-200 bg-white">
+          <AlertDescription>{v.message}</AlertDescription>
+        </Alert>
 
-      {v.scenario && (
-        <>
-        <div className="grid items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
-          <div className="flex min-w-0 flex-col gap-6">
-          <PanelFiltros
-            include={v.include}
-            onTogglePriority={v.togglePriority}
-            deshabilitado={v.deshabilitado}
-            sinPrioridades={v.sinPrioridades}
-            inicioVisible={v.inicioVisible}
-            iniciosDisponibles={v.iniciosDisponibles}
-            onElegirInicio={v.elegirInicio}
-            fijarInicio={v.fijarInicio}
-            onFijarInicioToggle={v.alternarFijarInicio}
-            puedeFijar={v.puedeFijar}
-            areaTramos={v.areaTramos}
-            planEnCurso={v.planning}
-            puedePlanificar={v.puedePlanificar}
-            onPlan={v.plan}
-          />
-          </div>
-          <div className="flex min-w-0 flex-col gap-6">
+        {v.scenario && (
+          <>
+            <PanelFiltros
+              include={v.include}
+              onTogglePriority={v.togglePriority}
+              deshabilitado={v.deshabilitado}
+              sinPrioridades={v.sinPrioridades}
+              inicioVisible={v.inicioVisible}
+              iniciosDisponibles={v.iniciosDisponibles}
+              onElegirInicio={v.elegirInicio}
+              fijarInicio={v.fijarInicio}
+              onFijarInicioToggle={v.alternarFijarInicio}
+              puedeFijar={v.puedeFijar}
+              areaTramos={v.areaTramos}
+              planEnCurso={v.planning}
+              puedePlanificar={v.puedePlanificar}
+              onPlan={v.plan}
+            />
+            <SidebarInfo />
+            <SeccionCosto />
+            <TablaTramos
+              totalTramos={v.scenario.segments.length}
+              totalNodos={v.scenario.nodes.length}
+              busqueda={v.busquedaTramo}
+              onBusqueda={v.buscarTramo}
+              soloVisibles={v.soloTramosVisibles}
+              onSoloVisibles={v.alternarVisibles}
+              areaTramos={v.areaTramos}
+              filtrados={v.tramosFiltrados}
+              paginaVisible={v.paginaVisible}
+              totalPaginas={v.totalPaginas}
+              prioridades={v.priorityBySegment}
+              costo={v.cost}
+              seleccionadoId={v.tramoSeleccionadoId}
+              onSeleccionar={v.seleccionarTramo}
+              deshabilitado={v.deshabilitado}
+              onOverride={v.overridePriority}
+              onPagina={v.irAPagina}
+            />
+          </>
+        )}
+      </aside>
+
+      {/* Mapa: grande y fijo a la derecha (sticky arriba en mobile) */}
+      <div className="relative order-1 z-10 h-[50vh] w-full shrink-0 bg-zinc-200 lg:order-2 lg:h-full lg:min-h-0 lg:flex-1 lg:self-stretch">
+        {v.scenario ? (
           <SeccionMapa />
-          <SeccionCosto />
+        ) : (
+          <div className="flex h-full items-center justify-center bg-zinc-100 text-sm text-zinc-500">
+            Cargando escenario…
           </div>
-        </div>
-          <TablaTramos
-            totalTramos={v.scenario.segments.length}
-            totalNodos={v.scenario.nodes.length}
-            busqueda={v.busquedaTramo}
-            onBusqueda={v.buscarTramo}
-            soloVisibles={v.soloTramosVisibles}
-            onSoloVisibles={v.alternarVisibles}
-            areaTramos={v.areaTramos}
-            filtrados={v.tramosFiltrados}
-            paginaVisible={v.paginaVisible}
-            totalPaginas={v.totalPaginas}
-            prioridades={v.priorityBySegment}
-            costo={v.cost}
-            seleccionadoId={v.tramoSeleccionadoId}
-            onSeleccionar={v.seleccionarTramo}
-            deshabilitado={v.deshabilitado}
-            onOverride={v.overridePriority}
-            onPagina={v.irAPagina}
-          />
-        </>
-      )}
+        )}
+      </div>
     </main>
   );
 }

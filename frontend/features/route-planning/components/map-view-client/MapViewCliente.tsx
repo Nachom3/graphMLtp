@@ -31,6 +31,7 @@ export function MapViewCliente({
   onFijarInicio,
   modoMapa = "prioridad",
   encuadreInicial,
+  className,
 }: {
   modelo: MapViewModel;
   onLimitesChange?: (limites: LimitesMapa) => void;
@@ -42,6 +43,8 @@ export function MapViewCliente({
   onFijarInicio?: (nodo: { nodeId: string; lat: number; lon: number }) => void;
   modoMapa?: ModoMapa;
   encuadreInicial?: LimitesMapa | null;
+  /** Altura/tamaño del contenedor (p. ej. h-full en el layout sidebar+mapa). */
+  className?: string;
 }) {
   const refDiv = useRef<HTMLDivElement | null>(null);
   const refL = useRef<typeof import("leaflet") | null>(null);
@@ -288,11 +291,21 @@ export function MapViewCliente({
       refCapas.current = L.layerGroup().addTo(mapa);
       const vigente = refModelo.current;
       if (vigente) dibujar(vigente);
-      reintento = setTimeout(() => mapa?.invalidateSize(), 100);
+      const invalidar = () => mapa?.invalidateSize({ animate: false });
+      reintento = setTimeout(invalidar, 50);
+      requestAnimationFrame(() => requestAnimationFrame(invalidar));
+      if (refDiv.current && typeof ResizeObserver !== "undefined") {
+        const ro = new ResizeObserver(invalidar);
+        ro.observe(refDiv.current);
+        // cleanup via mapa remove path: stash on mapa
+        (mapa as unknown as { __ro?: ResizeObserver }).__ro = ro;
+      }
     })();
     return () => {
       cancelado = true;
       if (reintento) clearTimeout(reintento);
+      const ro = mapa && (mapa as unknown as { __ro?: ResizeObserver }).__ro;
+      ro?.disconnect();
       mapa?.remove();
       if (refMapa.current === mapa) {
         refMapa.current = null;
@@ -332,7 +345,12 @@ export function MapViewCliente({
   return (
     <div
       ref={refDiv}
-      style={{ height: 480, width: "100%" }}
+      className={className}
+      style={{
+        width: "100%",
+        height: className ? "100%" : 480,
+        minHeight: className ? 280 : undefined,
+      }}
       data-testid="map-view"
       role="img"
       aria-label="Mapa del escenario con el recorrido planificado"

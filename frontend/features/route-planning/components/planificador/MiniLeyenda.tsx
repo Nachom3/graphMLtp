@@ -24,7 +24,7 @@ const ITEMS: Record<ModoMapa, { color: string; label: string; dashed?: boolean }
 export function MiniLeyenda({ modo }: { modo: ModoMapa }) {
   return (
     <div
-      className="pointer-events-none absolute bottom-3 left-3 z-[500] rounded-md border border-zinc-200 bg-white/95 p-2 text-xs shadow-sm"
+      className="pointer-events-none absolute bottom-14 left-3 z-[500] rounded-md border border-zinc-200 bg-white/95 p-2 text-xs shadow-sm"
       aria-hidden
     >
       <p className="mb-1 font-semibold uppercase tracking-wide text-zinc-500">
