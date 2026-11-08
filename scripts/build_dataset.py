@@ -6,7 +6,9 @@ Usage:
 """
 from __future__ import annotations
 
+import argparse
 from collections import Counter
+from pathlib import Path
 
 if __package__:
     from .dataset_builder import config, containers, features, graph, output
@@ -56,20 +58,39 @@ def write_metadata(nodos: list[dict], tramos: list[dict], audit: dict, zona_dist
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Construir dataset vial reproducible")
+    parser.add_argument("--montevideo", action="store_true", help="Procesar todos los ejes y contenedores de las fuentes de Montevideo")
+    parser.add_argument("--output", type=Path, help="Directorio de salida (por defecto dataset/salida o dataset/salida-montevideo)")
+    args = parser.parse_args()
+    salida = args.output or (DATASET_DIR / "salida-montevideo" if args.montevideo else SALIDA_DIR)
     ejes = load_ejes()
     print(f"ejes unicos (dedupe reftramo): {len(ejes)}")
 
-    fragments = clip_to_bbox(ejes)
-    print(f"fragmentos en el bbox del piloto: {len(fragments)}")
+    fragments = graph.all_ejes(ejes) if args.montevideo else clip_to_bbox(ejes)
+    print(f"fragmentos seleccionados: {len(fragments)}")
+    excluded = []
+    if args.montevideo:
+        # Every excluded source feature is reported, not silently dropped.
+        kept_refs = {fragment["reftramo"] for fragment in fragments}
+        excluded = [
+            {"reftramo": str(reftramo), "motivo": "sin linea de al menos 0.01 m"}
+            for reftramo, _nombre, _geometry in ejes if reftramo not in kept_refs
+        ]
+        print(f"ejes excluidos por geometría subcentimétrica o vacía: {len(excluded)}")
 
-    sub_segments = node_and_split(fragments)
-    nodos, tramos = build_graph(sub_segments)
-    print(f"nodos (CC mayor): {len(nodos)}")
-    print(f"tramos (CC mayor): {len(tramos)}")
+    sub_segments = node_and_split(fragments, min_segment_length=0 if args.montevideo else MIN_SEG_LEN_M)
+    nodos, tramos = build_graph(
+        sub_segments,
+        keep_all_components=args.montevideo,
+        length_decimals=8 if args.montevideo else 2,
+        coordinate_decimals=12 if args.montevideo else 7,
+    )
+    print(f"nodos: {len(nodos)}")
+    print(f"tramos: {len(tramos)}")
 
     # --- Etapa 2: contenedores ---
-    containers = [c for c in load_containers() if _in_bbox(c["long"], c["lat"])]
-    print(f"contenedores en el piloto: {len(containers)}")
+    containers = [c for c in load_containers() if args.montevideo or _in_bbox(c["long"], c["lat"])]
+    print(f"contenedores seleccionados: {len(containers)}")
 
     assignments, unassigned, dists = snap_containers(tramos, containers)
     counts = Counter(tid for tid, _c in assignments)
@@ -92,7 +113,7 @@ def main() -> None:
         print(
             f"  circuito {code}: {r['contenedores']} cont, {r['tramos']} tramos, {r['componentes']} comp"
         )
-    sw = crosscheck_smartwaste()
+    sw = crosscheck_smartwaste(full_city=args.montevideo)
     print(
         f"SmartWaste (cross-check): {sum(sw.values())} cont en piloto, {len(sw)} circuitos"
     )
@@ -109,6 +130,10 @@ def main() -> None:
     pct_p = ", ".join(f"{k} {v / len(tramos) * 100:.1f}%" for k, v in sorted(prio_dist.items()))
     print(f"prioridad_recoleccion (regla v1 recalibrada): {dict(sorted(prio_dist.items()))} -> {pct_p}")
 
+    # Preserve the same clipped and split road lines before removing the
+    # internal UTM geometry from the CSV records.
+    geometries = output.geometry_collection(tramos, coordinate_decimals=12 if args.montevideo else 7)
+
     # "utm" (geometria interna del snap) ya no se necesita
     for t in tramos:
         t.pop("utm", None)
@@ -117,14 +142,17 @@ def main() -> None:
     audit = {
         "contenedores_piloto": len(containers),
         "contenedores_no_asignados": len(unassigned),
+        "ejes_excluidos": excluded,
     }
-    quality_gates(nodos, tramos, audit)
+    quality_gates(nodos, tramos, audit, full_city=args.montevideo)
 
-    write_outputs(nodos, tramos)
-    write_metadata(nodos, tramos, audit, zona_dist, prio_dist)
-    print(f"-> {SALIDA_DIR / 'nodos.csv'}")
-    print(f"-> {SALIDA_DIR / 'tramos.csv'}")
-    print(f"-> {SALIDA_DIR / 'metadata.json'}")
+    output.write_outputs(nodos, tramos, salida)
+    output.write_geometries(geometries, salida)
+    output.write_metadata(nodos, tramos, audit, zona_dist, prio_dist, salida, full_city=args.montevideo)
+    print(f"-> {salida / 'nodos.csv'}")
+    print(f"-> {salida / 'tramos.csv'}")
+    print(f"-> {salida / 'geometrias.geojson'}")
+    print(f"-> {salida / 'metadata.json'}")
 
 
 if __name__ == "__main__":

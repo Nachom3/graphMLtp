@@ -7,7 +7,7 @@ saves that fitted pipeline (offline) and loads it back for inference.
 It never calls ``fit`` and never needs client training rows.
 
 Identification: ``model_id`` is ``"arbol"`` (the #10 choice). The
-default artifact path is ``backend/artifacts/arbol.joblib`` relative to
+default artifact path is ``backend/artifacts/arbol-montevideo.joblib`` anchored to
 the repo root, created locally by the documented generation command and
 NOT committed. ``joblib`` is the justified format: the sklearn-recommended
 persistence for pipelines with numpy data, already in requirements.
@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 DEFAULT_MODEL_ID = "arbol"
-DEFAULT_PIPELINE_PATH = Path("backend") / "artifacts" / "arbol.joblib"
+DEFAULT_PIPELINE_PATH = Path(__file__).resolve().parents[4] / "artifacts" / "arbol-montevideo.joblib"
 
 
 def load_pipeline(path: str | Path) -> Any:

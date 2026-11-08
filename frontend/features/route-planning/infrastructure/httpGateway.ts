@@ -1,5 +1,4 @@
 import type { ApiGateway, RoutePlanInput } from "../application/usecases";
-import { demoScenario } from "./demoScenario";
 import type {
   ErrorCode,
   ModelComparison,
@@ -14,6 +13,8 @@ import type {
 
 /** DTOs del contrato HTTP en inglés; se traducen en este adaptador. */
 interface ScenarioDTO {
+  scenario_id?: string;
+  version?: string;
   nodes: { node_id: string; lon: number; lat: number }[];
   segments: {
     segment_id: string;
@@ -24,6 +25,7 @@ interface ScenarioDTO {
     container_count: number;
     days_since_last_collection: number;
     historic_neighbor_complaints: number;
+    geometry?: { type: "LineString"; coordinates: [number, number][] } | null;
   }[];
 }
 
@@ -89,10 +91,25 @@ async function read<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+function geometryFromDTO(geometry: ScenarioDTO["segments"][number]["geometry"]): Segment["geometry"] {
+  if (geometry == null) return undefined;
+  if (
+    geometry.type !== "LineString" ||
+    !Array.isArray(geometry.coordinates) ||
+    geometry.coordinates.length < 2 ||
+    geometry.coordinates.some((point) =>
+      !Array.isArray(point) || point.length !== 2 ||
+      !Number.isFinite(point[0]) || !Number.isFinite(point[1]) ||
+      Math.abs(point[0]) > 180 || Math.abs(point[1]) > 90,
+    )
+  ) throw new Error("Geometría LineString inválida en el escenario");
+  return geometry.coordinates.map(([lon, lat]) => [lat, lon]);
+}
+
 function scenarioFromDTO(dto: ScenarioDTO) {
   return {
-    scenarioId: "piloto-mvd",
-    version: "v1",
+    scenarioId: dto.scenario_id ?? "escenario-api",
+    version: dto.version ?? "v1",
     nodes: dto.nodes.map((n) => ({ nodeId: n.node_id, lon: n.lon, lat: n.lat })),
     segments: dto.segments.map((s) => ({
       segmentId: s.segment_id,
@@ -103,6 +120,7 @@ function scenarioFromDTO(dto: ScenarioDTO) {
       containerCount: s.container_count,
       daysSinceLastCollection: s.days_since_last_collection,
       historicNeighborComplaints: s.historic_neighbor_complaints,
+      geometry: geometryFromDTO(s.geometry),
     })),
   };
 }
@@ -129,7 +147,9 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
   async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
     let res: Response;
     try {
-      res = await fetch(`${baseUrl}${path}`, { signal });
+      // El escenario se consulta por petición también desde Server Components;
+      // nunca reutilizar una respuesta antigua cuando cambia el dataset.
+      res = await fetch(`${baseUrl}${path}`, { signal, cache: "no-store" });
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") throw e;
       throw { code: "network" } satisfies OperationError;
@@ -156,12 +176,8 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
       return get<{ status: string; version: string; schema: string }>("/health", signal);
     },
     async getScenario(signal?: AbortSignal) {
-      try {
-        return scenarioFromDTO(await get<ScenarioDTO>("/scenario", signal));
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") throw error;
-        return demoScenario;
-      }
+      // Una API caída o un escenario inválido no deben simular datos reales.
+      return scenarioFromDTO(await get<ScenarioDTO>("/scenario", signal));
     },
     async predictPriorities(
       modelId: ModelId,

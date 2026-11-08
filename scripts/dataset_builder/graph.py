@@ -1,10 +1,13 @@
 """Clip street geometry and construct the collection road graph."""
 from __future__ import annotations
 
+from collections import defaultdict
+from math import floor
+
 import networkx as nx
 import numpy as np
 import pandas as pd
-from shapely import from_wkb, transform
+from shapely import STRtree, from_wkb, transform
 from shapely.geometry import (
     GeometryCollection,
     LineString,
@@ -104,6 +107,19 @@ def clip_to_bbox(ejes: list[tuple[int, str, str]]) -> list[dict]:
     return fragments
 
 
+CITY_MIN_SEG_LEN_M = 0.01
+
+
+def all_ejes(ejes: list[tuple[int, str, str]]) -> list[dict]:
+    """Flatten city roads, excluding sub-centimetre numerical artifacts."""
+    return [
+        {"reftramo": reftramo, "nombre": nombre, "utm": line}
+        for reftramo, nombre, geom in ejes
+        for line in _flatten_linestrings(geom)
+        if line.length >= CITY_MIN_SEG_LEN_M
+    ]
+
+
 def _extract_points(geom) -> list[Point]:
     """Puntos de una interseccion entre dos lineas (descarta solapes colineales)."""
     if geom.is_empty:
@@ -117,7 +133,9 @@ def _extract_points(geom) -> list[Point]:
     return []  # LineString/MultiLineString: solape colineal, no es cruce
 
 
-def node_and_split(fragments: list[dict]) -> list[dict]:
+def node_and_split(
+    fragments: list[dict], *, min_segment_length: float = MIN_SEG_LEN_M
+) -> list[dict]:
     """Divide los fragmentos en los cruces a media arista y devuelve sub-segmentos.
 
     Cada sub-segmento = {"reftramo", "nombre", "utm": LineString UTM,
@@ -126,14 +144,18 @@ def node_and_split(fragments: list[dict]) -> list[dict]:
     cruce a media arista) se "nodifica" aqui para que el grafo sea planar.
     """
     geoms = [f["utm"] for f in fragments]
+    # Only geometries with overlapping envelopes can intersect. STRtree is
+    # static and returns indices into geoms (Shapely >= 2).
+    tree = STRtree(geoms)
 
     sub_segments = []
     for i, frag in enumerate(fragments):
         ls = frag["utm"]
         split_dists = set()
-        for j, other in enumerate(geoms):
+        for j in sorted(int(index) for index in tree.query(ls)):
             if j == i:
                 continue
+            other = geoms[j]
             if not ls.intersects(other):
                 continue
             for p in _extract_points(ls.intersection(other)):
@@ -141,7 +163,7 @@ def node_and_split(fragments: list[dict]) -> list[dict]:
                 if d <= SNAP_TOL_M or d >= ls.length - SNAP_TOL_M:
                     continue  # cruce en un extremo: ya es nodo compartido
                 split_dists.add(round(d, 6))
-        pieces = _split_line(ls, sorted(split_dists))
+        pieces = _split_line(ls, sorted(split_dists), min_length=min_segment_length)
         for k, piece in enumerate(pieces):
             sub_segments.append(
                 {
@@ -154,7 +176,9 @@ def node_and_split(fragments: list[dict]) -> list[dict]:
     return sub_segments
 
 
-def _split_line(ls: LineString, dists: list[float]) -> list[LineString]:
+def _split_line(
+    ls: LineString, dists: list[float], *, min_length: float = MIN_SEG_LEN_M
+) -> list[LineString]:
     """Corta ls en las distancias dadas (ya ordenadas y dentro de (0, length))."""
     if not dists:
         return [ls]
@@ -162,11 +186,11 @@ def _split_line(ls: LineString, dists: list[float]) -> list[LineString]:
     prev = 0.0
     for d in dists:
         sub = substring(ls, prev, d)
-        if sub.length >= MIN_SEG_LEN_M:
+        if sub.length > 0 and sub.length >= min_length:
             pieces.append(sub)
         prev = d
     sub = substring(ls, prev, ls.length)
-    if sub.length >= MIN_SEG_LEN_M:
+    if sub.length > 0 and sub.length >= min_length:
         pieces.append(sub)
     return pieces
 
@@ -190,22 +214,39 @@ def _tramo_id(reftramo: int, occ: int) -> str:
     return f"{reftramo}-{occ + 1}"
 
 
-def build_graph(sub_segments: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Nodos en extremos (snap) + aristas; filtra al componente conexo mayor.
+def build_graph(
+    sub_segments: list[dict], *, keep_all_components: bool = False,
+    length_decimals: int = 2, coordinate_decimals: int = 7,
+) -> tuple[list[dict], list[dict]]:
+    """Nodos en extremos (snap) + aristas; por defecto conserva la CC mayor.
 
     Devuelve (nodos, tramos) con IDs estables N0001../reftramo y coordenadas
     WGS84 en nodos.
     """
     sub_segments = sorted(sub_segments, key=lambda s: (s["reftramo"], s["frag_idx"]))
 
-    # Snap determinista de endpoints (O(n^2), n ~ cientos).
+    # Dynamic spatial hash: unlike an immutable STRtree it can be updated as
+    # representatives are added. Always pick the earliest representative,
+    # preserving the legacy scan's deterministic (not nearest) semantics.
     reps: list[tuple[float, float]] = []
+    cells: dict[tuple[int, int], list[int]] = defaultdict(list)
 
     def node_for(x: float, y: float) -> int:
-        for idx, (rx, ry) in enumerate(reps):
-            if (x - rx) ** 2 + (y - ry) ** 2 <= SNAP_TOL_M**2:
-                return idx
+        cell_x, cell_y = floor(x / SNAP_TOL_M), floor(y / SNAP_TOL_M)
+        candidates = (
+            idx
+            for dx in (-1, 0, 1)
+            for dy in (-1, 0, 1)
+            for idx in cells.get((cell_x + dx, cell_y + dy), ())
+        )
+        matches = [
+            idx for idx in candidates
+            if (x - reps[idx][0]) ** 2 + (y - reps[idx][1]) ** 2 <= SNAP_TOL_M**2
+        ]
+        if matches:
+            return min(matches)
         reps.append((x, y))
+        cells[(cell_x, cell_y)].append(len(reps) - 1)
         return len(reps) - 1
 
     raw_edges = []
@@ -214,14 +255,33 @@ def build_graph(sub_segments: list[dict]) -> tuple[list[dict], list[dict]]:
         c1 = s["utm"].coords[-1]
         n0 = node_for(c0[0], c0[1])
         n1 = node_for(c1[0], c1[1])
-        raw_edges.append((n0, n1, s))
+        if n0 != n1:
+            raw_edges.append((n0, n1, s))
+            continue
+
+        # Real IDE axes can form a closed ring (or have endpoints closer
+        # than the snap tolerance). Keep the road and its exact shape: split
+        # it at half length into two edges with a distinct intermediate node.
+        # This special node must not enter the normal snap grid: otherwise a
+        # small ring could collapse back onto its own endpoint, or affect
+        # unrelated subsequent roads.
+        line = s["utm"]
+        midpoint = line.interpolate(line.length / 2)
+        middle = len(reps)
+        reps.append((midpoint.x, midpoint.y))
+        first = {**s, "utm": substring(line, 0, line.length / 2)}
+        second = {**s, "utm": substring(line, line.length / 2, line.length)}
+        raw_edges.extend(((n0, middle, first), (middle, n1, second)))
 
     # Componente conexo mayor.
     g = nx.Graph()
     g.add_nodes_from(range(len(reps)))
     g.add_edges_from((n0, n1) for n0, n1, _ in raw_edges)
-    largest = max(nx.connected_components(g), key=len)
-    keep_nodes = set(largest)
+    if keep_all_components:
+        keep_nodes = set(g.nodes)
+    else:
+        largest = max(nx.connected_components(g), key=len)
+        keep_nodes = set(largest)
 
     # Renumeracion determinista: nodos ordenados por (x, y).
     kept_reps = [(i, reps[i]) for i in range(len(reps)) if i in keep_nodes]
@@ -234,8 +294,8 @@ def build_graph(sub_segments: list[dict]) -> tuple[list[dict], list[dict]]:
         nodos.append(
             {
                 "nodo_id": f"N{len(nodos) + 1:04d}",
-                "lon": round(lon, 7),
-                "lat": round(lat, 7),
+                "lon": round(lon, coordinate_decimals),
+                "lat": round(lat, coordinate_decimals),
             }
         )
 
@@ -251,7 +311,7 @@ def build_graph(sub_segments: list[dict]) -> tuple[list[dict], list[dict]]:
                 "tramo_id": _tramo_id(s["reftramo"], occ),
                 "nodo_origen": f"N{new_id[n0] + 1:04d}",
                 "nodo_destino": f"N{new_id[n1] + 1:04d}",
-                "longitud_m": round(_geodetic_length_m(s["utm"]), 2),
+                "longitud_m": round(_geodetic_length_m(s["utm"]), length_decimals),
                 "nombre_calle": s["nombre"],
                 "utm": s["utm"],  # interno: geometria para el snap de contenedores
             }

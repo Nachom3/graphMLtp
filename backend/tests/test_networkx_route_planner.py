@@ -11,11 +11,14 @@ import sys
 from pathlib import Path
 
 import pytest
+import networkx as nx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from collection.adapters.graphs.networkx_route_planner import (  # noqa: E402
     NetworkxRoutePlanner,
+    _build_full_multigraph,
+    _connect_components,
 )
 from collection.domain.entities.predicted_segment import PredictedSegment  # noqa: E402
 from collection.domain.entities.route_config import RouteConfig  # noqa: E402
@@ -190,3 +193,63 @@ def test_repetitions_and_distances_are_consistent():
             expected.append(sid)
     assert tuple(expected) == route.repetitions
     check_circuit(route.order, segments)
+
+
+def test_component_join_multisource_matches_brute_force_distances(monkeypatch):
+    # The cheapest connection between two components need not use the first
+    # endpoint or the direct-looking connection.
+    segments = [
+        seg("AB", "A", "B", 1), seg("CD", "C", "D", 1),
+        seg("EF", "E", "F", 1), seg("BC", "B", "C", 2, 0),
+        seg("DE", "D", "E", 3, 0), seg("AF", "A", "F", 20, 0),
+    ]
+    graph = _build_full_multigraph([], segments)
+    components = [{"A", "B"}, {"C", "D"}, {"E", "F"}]
+    aux = nx.Graph()
+    for i, first in enumerate(components):
+        for j, second in enumerate(components[i + 1 :], i + 1):
+            weight = min(
+                nx.shortest_path_length(graph, a, b, weight="weight")
+                for a in first for b in second
+            )
+            aux.add_edge(i, j, weight=weight)
+    expected_cost = nx.minimum_spanning_tree(aux).size(weight="weight")
+    real_search = nx.multi_source_dijkstra
+    calls = []
+
+    def counted(*args, **kwargs):
+        calls.append(args[1])
+        return real_search(*args, **kwargs)
+
+    monkeypatch.setattr(nx, "multi_source_dijkstra", counted)
+    required, transit = _connect_components(
+        graph, ["AB", "CD", "EF"], {s.segment_id: s for s in segments}
+    )
+    assert set(required) == {"AB", "CD", "EF", "BC", "DE"}
+    assert sum(s.length_m for s in segments if s.segment_id in transit) == expected_cost
+    assert len(calls) == len(components) - 1
+
+
+def test_start_outside_required_network_uses_shortest_transit_and_closes():
+    segments = [
+        seg("AB", "A", "B", 2),
+        seg("BC", "B", "C", 3, 0),
+        seg("AC", "A", "C", 20, 0),
+    ]
+    route = NetworkxRoutePlanner().plan(
+        [], segments, [prio("AB")], RouteConfig(include=("high",), start_node_id="C")
+    )
+    assert route.mandatory == ("AB",)
+    assert route.transit == ("BC",)
+    assert route.total_cost_m == pytest.approx(10)
+    assert route.order[0] == "BC"
+    check_circuit(route.order, segments)
+
+
+def test_unknown_or_disconnected_start_remains_impossible():
+    segments = [seg("AB", "A", "B", 1), seg("CD", "C", "D", 1, 0)]
+    planner = NetworkxRoutePlanner()
+    with pytest.raises(ImpossibleRoute, match="inexistente"):
+        planner.plan([], segments, [prio("AB")], RouteConfig(start_node_id="Z"))
+    with pytest.raises(ImpossibleRoute, match="inaccesible"):
+        planner.plan([], segments, [prio("AB")], RouteConfig(start_node_id="C"))

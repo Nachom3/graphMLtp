@@ -19,6 +19,34 @@ function jsonRes(body: unknown, status = 200): Response {
 }
 
 describe("httpGateway: backend en inglés, único lugar con fetch", () => {
+  it("convierte LineString GeoJSON de lon/lat a lat/lon y no lo manda al modelo", async () => {
+    mockFetchOnce((_url, init) => {
+      if (init?.method === "POST") {
+        const body = JSON.parse(String(init.body));
+        expect(body.segments[0]).not.toHaveProperty("geometry");
+        return jsonRes({ model_id: "arbol", predictions: [] });
+      }
+      expect(init?.cache).toBe("no-store");
+      return jsonRes({
+        nodes: [{ node_id: "A", lon: -56.2, lat: -34.9 }, { node_id: "B", lon: -56.1, lat: -34.8 }],
+        segments: [{ segment_id: "T", origin_node: "A", destination_node: "B", length_m: 1,
+          zone_type: "residential", container_count: 1, days_since_last_collection: 0, historic_neighbor_complaints: 0,
+          geometry: { type: "LineString", coordinates: [[-56.2, -34.9], [-56.15, -34.85], [-56.1, -34.8]] } }],
+      });
+    });
+    const gw = crearHttpGateway("http://test");
+    const scenario = await gw.getScenario();
+    expect(scenario.segments[0].geometry).toEqual([[-34.9, -56.2], [-34.85, -56.15], [-34.8, -56.1]]);
+    await gw.predictPriorities("arbol", scenario.segments);
+  });
+
+  it("rechaza errores de escenario y geometrías inválidas sin cargar fixtures silenciosos", async () => {
+    const gw = crearHttpGateway("http://test");
+    mockFetchOnce(() => jsonRes({ detail: "down" }, 500));
+    await expect(gw.getScenario()).rejects.toMatchObject({ code: "backend" });
+    mockFetchOnce(() => jsonRes({ nodes: [], segments: [{ geometry: { type: "LineString", coordinates: [[-56, -34]] } }] }));
+    await expect(gw.getScenario()).rejects.toThrow(/Geometría/);
+  });
   it("health devuelve status, versión y esquema", async () => {
     mockFetchOnce((url) => {
       expect(url).toContain("/health");

@@ -1,3 +1,3 @@
 export { MapView } from "./MapView";
-export { toMapViewModel } from "./mapViewModel";
-export type { MapViewModel, TramoVisible } from "./mapViewModel";
+export { lineaIntersecaLimites, orientarPasos, seleccionarAreaVisible, toMapViewModel } from "./mapViewModel";
+export type { LimitesMapa, MapViewModel, NodoVisible, TramoVisible } from "./mapViewModel";

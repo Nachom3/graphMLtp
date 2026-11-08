@@ -53,7 +53,7 @@ def create_predict_priorities_use_case(
     """Wire prediction around a FITTED ``arbol`` pipeline (no ``fit``).
 
     Pass ``pipeline`` directly (tests/fakes) or ``pipeline_path`` to an
-    offline-saved artifact (default ``backend/artifacts/arbol.joblib``).
+    offline-saved artifact (default ``backend/artifacts/arbol-montevideo.joblib``).
     Unknown ``model_id`` raises ``ValueError`` (API maps it to
     ``MODELO_DESCONOCIDO``); a missing file raises ``FileNotFoundError``
     (model unavailable) and a bad payload raises ``ValueError``
@@ -75,5 +75,13 @@ def create_plan_route_use_case() -> PlanRoute:
 
 
 def pilot_scenario_source() -> Path:
-    """Return the bundled pilot fixture directory used by the API by default."""
-    return Path(__file__).resolve().parents[2] / "tests" / "fixtures"
+    """Return the full-city dataset, unless explicitly configured otherwise.
+
+    Never fall back silently to the small test fixture or the pilot area.
+    """
+    import os
+
+    configured = os.environ.get("COLLECTION_SCENARIO_SOURCE")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return Path(__file__).resolve().parents[3] / "dataset" / "salida-montevideo"

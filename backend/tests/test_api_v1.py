@@ -1,6 +1,8 @@
 """HTTP contract tests for the v1 API transport."""
 from __future__ import annotations
 
+import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -54,7 +56,7 @@ def test_health_and_pilot_scenario_http_contract():
     assert health.status_code == 200
     assert health.json() == {"status": "ok", "version": "v1", "schema": "v1"}
 
-    response = client.get("/scenario")
+    response = client_with().get("/scenario")
     assert response.status_code == 200
     scenario = response.json()
     assert scenario["scenario_id"] == "pilot"
@@ -62,6 +64,45 @@ def test_health_and_pilot_scenario_http_contract():
     assert len(scenario["nodes"]) == 6
     assert len(scenario["segments"]) == 12
     assert scenario["segments"][0]["segment_id"] == "T0001"
+
+
+def test_default_city_model_path_is_anchored_to_backend():
+    from collection.adapters.models.pipeline_store import DEFAULT_PIPELINE_PATH
+
+    assert DEFAULT_PIPELINE_PATH == Path(__file__).resolve().parents[1] / "artifacts" / "arbol-montevideo.joblib"
+
+
+def test_default_scenario_reports_missing_city_dataset_without_fallback(monkeypatch, tmp_path):
+    monkeypatch.setenv("COLLECTION_SCENARIO_SOURCE", str(tmp_path / "missing"))
+    response = TestClient(create_app()).get("/scenario")
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "SCENARIO_UNAVAILABLE"
+
+
+def test_scenario_exposes_geometry_by_segment_id_and_rejects_mismatch(tmp_path):
+    for name in ("nodos.csv", "tramos.csv"):
+        shutil.copy(FIXTURES / name, tmp_path / name)
+    fixture_segments = client_with().get("/scenario").json()["segments"]
+    coordinates = [[-56.15, -34.90], [-56.149, -34.901], [-56.148, -34.90]]
+    features = [
+        {"type": "Feature", "properties": {"tramo_id": segment["segment_id"]},
+         "geometry": {"type": "LineString", "coordinates": coordinates}}
+        for segment in reversed(fixture_segments)
+    ]
+    path = tmp_path / "geometrias.geojson"
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+    app = FastAPI()
+    app.include_router(create_router(scenario_source=str(tmp_path)))
+    client = TestClient(app)
+    response = client.get("/scenario")
+    assert response.status_code == 200
+    for segment in response.json()["segments"]:
+        assert segment["geometry"] == {"type": "LineString", "coordinates": coordinates}
+    features.pop()
+    path.write_text(json.dumps({"type": "FeatureCollection", "features": features}), encoding="utf-8")
+    response = client.get("/scenario")
+    assert response.status_code == 503
+    assert "no coinciden" in response.json()["detail"]["detail"]
 
 
 def test_prediction_returns_one_prediction_per_segment_without_training_rows():

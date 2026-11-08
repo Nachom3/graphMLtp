@@ -18,6 +18,10 @@ meters and a single truck doing a closed circuit.
   optimality is NOT promised. The network is bidirectional by
   simplification; it does not validate real senses, capacity,
   schedules or multiple vehicles.
+- Scope: this is an exact matching over odd vertices on the selected
+  network, not a city-scale vehicle-routing solver. Its complete odd
+  graph grows quadratically and matching can take cubic time; select a
+  bounded service area before invoking it on a city-wide dataset.
 """
 
 from __future__ import annotations
@@ -127,35 +131,23 @@ def _connect_components(
     ]
     if len(components) <= 1:
         return list(mandatory_ids), []
-    mandatory_nodes = set().union(*components)
-    distances: dict[str, dict[str, float]] = {}
-    paths: dict[str, dict[str, list[str]]] = {}
-    for source in mandatory_nodes:
-        dist = nx.single_source_dijkstra_path_length(
-            full_graph, source, weight="weight"
-        )
-        path = nx.single_source_dijkstra_path(full_graph, source, weight="weight")
-        distances[source] = dist
-        paths[source] = path
     aux: nx.Graph = nx.Graph()
     for index in range(len(components)):
         aux.add_node(index)
     best_path_for_pair: dict[tuple[int, int], list[str]] = {}
-    for i in range(len(components)):
+    for i in range(len(components) - 1):
+        # The nearest path between components is a multi-source shortest
+        # path: one search per component rather than one per mandatory node.
+        # Sorting makes tie handling reproducible for a fixed NetworkX version.
+        distances, paths = nx.multi_source_dijkstra(
+            full_graph, sorted(components[i]), weight="weight"
+        )
         for j in range(i + 1, len(components)):
-            best_dist = float("inf")
-            best_path: list[str] | None = None
-            for source in components[i]:
-                dist = distances.get(source, {})
-                path = paths.get(source, {})
-                for target in components[j]:
-                    candidate = dist.get(target)
-                    if candidate is not None and candidate < best_dist:
-                        best_dist = candidate
-                        best_path = path[target]
-            if best_path is not None:
-                aux.add_edge(i, j, weight=best_dist)
-                best_path_for_pair[(i, j)] = best_path
+            reachable = [node for node in components[j] if node in distances]
+            if reachable:
+                target = min(reachable, key=lambda node: (distances[node], node))
+                aux.add_edge(i, j, weight=distances[target])
+                best_path_for_pair[(i, j)] = paths[target]
     try:
         tree = nx.minimum_spanning_tree(aux, weight="weight")
     except Exception as exc:
@@ -183,27 +175,22 @@ def _pair_odd_vertices(
     required_graph: nx.MultiGraph, odd: list[str]
 ) -> list[list[str]]:
     """Shortest paths for each min-weight matched odd pair."""
-    dist_all: dict[str, dict[str, float]] = {}
-    path_all: dict[str, dict[str, list[str]]] = {}
-    for source in odd:
-        dist_all[source] = nx.single_source_dijkstra_path_length(
-            required_graph, source, weight="weight"
-        )
-        path_all[source] = nx.single_source_dijkstra_path(
-            required_graph, source, weight="weight"
-        )
     complete: nx.Graph = nx.Graph()
     complete.add_nodes_from(odd)
     pair_path: dict[tuple[str, str], list[str]] = {}
     for index, first in enumerate(odd):
+        # Compute distance and path together; retain only paths to odd nodes.
+        distances, paths = nx.single_source_dijkstra(
+            required_graph, first, weight="weight"
+        )
         for second in odd[index + 1 :]:
-            distance = dist_all.get(first, {}).get(second)
+            distance = distances.get(second)
             if distance is None:
                 raise ImpossibleRoute(
                     f"red elegida desconexa entre {first!r} y {second!r}"
                 )
             complete.add_edge(first, second, weight=distance)
-            pair_path[(first, second)] = path_all[first][second]
+            pair_path[(first, second)] = paths[second]
     matching = nx.min_weight_matching(complete, weight="weight")
     matched: set[str] = set()
     for first, second in matching:
@@ -259,9 +246,32 @@ class NetworkxRoutePlanner:
         if start is None:
             start = segment_by_id[mandatory[0]].origin_node
         elif start not in required_graph:
-            raise ImpossibleRoute(
-                f"nodo de inicio {start!r} inaccesible desde la ruta elegida"
-            )
+            if start not in full_graph:
+                raise ImpossibleRoute(f"nodo de inicio {start!r} inexistente")
+            try:
+                # Connect the chosen start to the closest node in the selected
+                # network. The connecting streets remain transit and will be
+                # duplicated by the postman stage when needed for closure.
+                _, node_path = nx.multi_source_dijkstra(
+                    full_graph, sorted(required_graph.nodes), target=start, weight="weight"
+                )
+            except nx.NetworkXNoPath:
+                raise ImpossibleRoute(
+                    f"nodo de inicio {start!r} inaccesible desde la ruta elegida"
+                ) from None
+            for segment_id in _nodes_path_to_segments(full_graph, node_path):
+                if segment_id in required_ids:
+                    continue
+                segment = segment_by_id[segment_id]
+                required_ids.append(segment_id)
+                required_graph.add_edge(
+                    segment.origin_node,
+                    segment.destination_node,
+                    key=segment_id,
+                    weight=float(segment.length_m),
+                    segment_id=segment_id,
+                    length_m=float(segment.length_m),
+                )
         odd = [node for node, degree in required_graph.degree() if degree % 2 == 1]
         euler_graph = required_graph.copy()
         if odd:

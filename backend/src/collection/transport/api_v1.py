@@ -5,12 +5,15 @@ application use cases. It does not implement collection or graph logic.
 """
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Literal
 
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from ..adapters.datasets.segment_geometry import load_segment_geometries
 from ..application.use_cases.plan_route.contract import PlanRouteContract
 from ..application.use_cases.predict_priorities.contract import (
     PredictPrioritiesContract,
@@ -97,11 +100,24 @@ def create_router(
         else str(pilot_scenario_source())
     )
 
-    @router.get("/scenario")
-    def get_scenario() -> dict:
-        nodes, segments = validate.execute(source, "v1")
+    @router.get("/scenario", response_model=None)
+    def get_scenario() -> dict | JSONResponse:
+        try:
+            nodes, segments = validate.execute(source, "v1")
+            geometries = load_segment_geometries(source, required=scenario_source is None)
+            if (geometries or scenario_source is None) and set(geometries) != {segment.segment_id for segment in segments}:
+                raise InvalidDataset("IDs de geometrías y tramos no coinciden")
+        except InvalidDataset as exc:
+            detail = str(exc)
+            if scenario_source is None:
+                detail += "; generá o revisá el escenario con python scripts/build_dataset.py --montevideo"
+            return _error(503, "SCENARIO_UNAVAILABLE", detail)
         return {
-            "scenario_id": "pilot",
+            "scenario_id": (
+                "pilot" if scenario_source is not None
+                else Path(source).name if os.environ.get("COLLECTION_SCENARIO_SOURCE")
+                else "montevideo"
+            ),
             "version": "v1",
             "nodes": [
                 {
@@ -111,7 +127,10 @@ def create_router(
                 }
                 for node in nodes
             ],
-            "segments": [segment.__dict__ for segment in segments],
+            "segments": [
+                {**segment.__dict__, "geometry": geometries.get(segment.segment_id)}
+                for segment in segments
+            ],
         }
 
     @router.post("/predictions:predict", response_model=None)

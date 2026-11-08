@@ -27,14 +27,15 @@ export function ControlesRecorrido({
     "rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50";
   return (
     <div
-      className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4"
+      className="rounded-lg border border-zinc-200 bg-zinc-50 p-4"
       role="group"
-      aria-label="Reproducción del recorrido"
+      aria-label="Reproducción del recorrido paso a paso"
     >
-      <p className="text-sm text-zinc-700" aria-live="polite">
+      <p className="text-sm font-medium text-zinc-800">Visualización paso a paso</p>
+      <p className="mt-1 text-sm text-zinc-600" aria-live="polite">
         {actual >= 0 && tramoActual
-          ? `Vehículo 🚛 en paso ${actual + 1} de ${total}: tramo ${tramoActual}`
-          : "Recorrido completo en el mapa. Reproducí el paso del vehículo con los controles."}
+          ? `Paso ${actual + 1} de ${total}: tramo ${tramoActual}`
+          : "El mapa muestra el circuito completo. Reproducí el recorrido para ver cada tramo."}
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
@@ -78,11 +79,12 @@ export function ControlesRecorrido({
       <input
         type="range"
         min={0}
-        max={total - 1}
+        max={Math.max(total - 1, 0)}
         value={Math.max(actual, 0)}
         onChange={(event) => alSaltar(Number(event.target.value))}
         aria-label="Paso del recorrido"
-        className="mt-3 w-full"
+        className="mt-3 w-full accent-emerald-700"
+        disabled={total === 0}
       />
     </div>
   );

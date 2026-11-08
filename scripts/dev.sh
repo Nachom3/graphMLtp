@@ -15,8 +15,13 @@ pick_python() {
 }
 PYTHON="$(pick_python)"
 
-if [ ! -f "$ROOT/backend/artifacts/arbol.joblib" ]; then
-  echo ">> Generando artefacto offline backend/artifacts/arbol.joblib ..."
+if [ ! -f "$ROOT/dataset/salida-montevideo/tramos.csv" ] || [ ! -f "$ROOT/dataset/salida-montevideo/geometrias.geojson" ]; then
+  echo ">> Falta el dataset completo. Generalo primero: python scripts/build_dataset.py --montevideo" >&2
+  exit 1
+fi
+
+if [ ! -f "$ROOT/backend/artifacts/arbol-montevideo.joblib" ]; then
+  echo ">> Generando artefacto offline backend/artifacts/arbol-montevideo.joblib ..."
   "$PYTHON" scripts/generate_arbol_artifact.py
 fi
 

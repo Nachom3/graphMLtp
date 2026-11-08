@@ -7,7 +7,7 @@ import type {
   Marker,
   Polyline,
 } from "leaflet";
-import type { MapViewModel, TramoVisible } from "../map-view/mapViewModel";
+import { puntoMedioEnLinea, type LimitesMapa, type MapViewModel, type TramoVisible } from "../map-view/mapViewModel";
 
 /**
  * Cliente Leaflet real (solo se importa con ssr:false desde MapView).
@@ -15,19 +15,36 @@ import type { MapViewModel, TramoVisible } from "../map-view/mapViewModel";
  * recrear el mapa (la animación del vehículo no parpadea).
  * Recibe solo el view-model puro, nunca entidades del backend.
  */
-export function MapViewCliente({ modelo }: { modelo: MapViewModel }) {
+export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, onSeleccionarTramo }: {
+  modelo: MapViewModel;
+  onLimitesChange?: (limites: LimitesMapa) => void;
+  tramoSeleccionadoId?: string | null;
+  onSeleccionarTramo?: (segmentId: string) => void;
+}) {
   const refDiv = useRef<HTMLDivElement | null>(null);
   const refL = useRef<typeof import("leaflet") | null>(null);
   const refMapa = useRef<MapaLeaflet | null>(null);
   const refCapas = useRef<LayerGroup | null>(null);
   const refLineas = useRef<Map<string, Polyline>>(new Map());
+  const refContornos = useRef<Map<string, Polyline>>(new Map());
+  const refNodos = useRef<LayerGroup | null>(null);
   const refVehiculo = useRef<Marker | null>(null);
+  const refFlecha = useRef<Marker | null>(null);
   const refAjuste = useRef<string | null>(null);
+  const refEncuadreInicial = useRef(false);
+  const refDatos = useRef<Map<string, TramoVisible>>(new Map());
+  const refHayRecorrido = useRef(false);
   const refModelo = useRef(modelo);
+  const refLimitesChange = useRef(onLimitesChange);
+  const refSeleccionado = useRef(tramoSeleccionadoId);
+  const refOnSeleccionar = useRef(onSeleccionarTramo);
+  const refSeleccionCapas = useRef<Map<string, Polyline>>(new Map());
 
-  // El modelo vigente siempre disponible para la carga asíncrona de Leaflet.
   useEffect(() => {
     refModelo.current = modelo;
+    refLimitesChange.current = onLimitesChange;
+    refSeleccionado.current = tramoSeleccionadoId;
+    refOnSeleccionar.current = onSeleccionarTramo;
   });
 
   function dibujar(m: MapViewModel) {
@@ -35,29 +52,153 @@ export function MapViewCliente({ modelo }: { modelo: MapViewModel }) {
     const mapa = refMapa.current;
     const capas = refCapas.current;
     if (!L || !mapa || !capas) return;
-    const clave = `${m.tramos.map((t) => t.segmentId).join(",")}|${m.centro.join(",")}`;
+
+    const clave = `${m.tramos.map((t) => t.segmentId).join(",")}|${m.nodos
+      .map((n) => n.nodeId)
+      .join(",")}|${m.centro.join(",")}`;
+
     if (clave !== refAjuste.current) {
       capas.clearLayers();
       refLineas.current = new Map();
+      refContornos.current = new Map();
+      refSeleccionCapas.current = new Map();
+      if (refNodos.current) {
+        refNodos.current.clearLayers();
+      } else {
+        refNodos.current = L.layerGroup().addTo(mapa);
+      }
+
+      // Contornos de repetición debajo; tramos encima.
       for (const t of m.tramos) {
         if (t.puntos.length === 0) continue;
-        const linea = L.polyline(t.puntos, estilo(t)).bindTooltip(etiquetaTramo(t));
+        if (t.esRepetido) {
+          const contorno = L.polyline(t.puntos, {
+            color: "#0f766e",
+            weight: 12,
+            opacity: 0.35,
+            lineCap: "round",
+            interactive: false,
+          });
+          contorno.addTo(capas);
+          refContornos.current.set(t.segmentId, contorno);
+        }
+        const seleccionado = refSeleccionado.current === t.segmentId;
+        if (seleccionado) {
+          const marca = L.polyline(t.puntos, {
+            color: "#7c3aed",
+            weight: 14,
+            opacity: 0.35,
+            lineCap: "round",
+            interactive: false,
+          });
+          marca.addTo(capas);
+          refSeleccionCapas.current.set(t.segmentId, marca);
+        }
+        const linea = L.polyline(t.puntos, estilo(t, m.hayRecorrido, seleccionado)).bindTooltip(
+          etiquetaTramo(t),
+        );
+        linea.on("click", (evento) => {
+          // Evita que el mapa interprete el clic como pan/zoom incidental.
+          L.DomEvent.stopPropagation(evento);
+          refOnSeleccionar.current?.(t.segmentId);
+        });
         linea.addTo(capas);
         refLineas.current.set(t.segmentId, linea);
       }
-      const puntos = m.tramos.flatMap((t) => t.puntos);
-      if (puntos.length > 0) {
-        mapa.fitBounds(L.latLngBounds(puntos.map(([lat, lon]) => L.latLng(lat, lon))), {
-          padding: [24, 24],
+
+      for (const n of m.nodos.filter((n) => n.esInicio)) {
+        const icono: DivIcon = L.divIcon({
+          className: n.esInicio ? "marcador-nodo marcador-nodo-inicio" : "marcador-nodo",
+          html: `<span>${n.nodeId.replace(/^N0*/, "N")}</span>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
         });
+        L.marker([n.lat, n.lon], {
+          icon: icono,
+          keyboard: false,
+          title: n.esInicio ? `Inicio ${n.nodeId}` : n.nodeId,
+        }).addTo(refNodos.current);
+      }
+
+      // La lista de tramos cambia al mover el mapa por el culling de viewport.
+      // Encuadrar solo una vez evita deshacer cada zoom o desplazamiento.
+      if (!refEncuadreInicial.current && (m.tramos.length > 0 || m.nodos.length > 1000)) {
+        if (m.nodos.length > 1000 || m.tramos.length > 1000) {
+          mapa.setView([-34.905, -56.16], 13);
+        } else {
+          const limites = L.latLngBounds([]);
+          for (const tramo of m.tramos) {
+            for (const punto of tramo.puntos) limites.extend(punto);
+          }
+          if (limites.isValid()) mapa.fitBounds(limites, { padding: [36, 36] });
+        }
+        refEncuadreInicial.current = true;
       }
       refAjuste.current = clave;
     } else {
-      // Mismo escenario: solo se actualiza el resaltado del paso actual.
       for (const t of m.tramos) {
-        refLineas.current.get(t.segmentId)?.setStyle(estilo(t));
+        const anterior = refDatos.current.get(t.segmentId);
+        const linea = refLineas.current.get(t.segmentId);
+        const seleccionado = refSeleccionado.current === t.segmentId;
+        const cambioEstilo = !anterior || refHayRecorrido.current !== m.hayRecorrido ||
+          anterior.prioridad !== t.prioridad || anterior.esPasoActual !== t.esPasoActual ||
+          anterior.esDestino !== t.esDestino || anterior.esTransito !== t.esTransito ||
+          anterior.enRecorrido !== t.enRecorrido || anterior.esRepetido !== t.esRepetido;
+        linea?.setStyle(estilo(t, m.hayRecorrido, seleccionado));
+        let marca = refSeleccionCapas.current.get(t.segmentId);
+        if (seleccionado && !marca && t.puntos.length > 0) {
+          marca = L.polyline(t.puntos, {
+            color: "#7c3aed",
+            weight: 14,
+            opacity: 0.35,
+            lineCap: "round",
+            interactive: false,
+          });
+          marca.addTo(capas);
+          marca.bringToBack();
+          refSeleccionCapas.current.set(t.segmentId, marca);
+        }
+        if (marca && !seleccionado) {
+          marca.remove();
+          refSeleccionCapas.current.delete(t.segmentId);
+        }
+        if (!anterior || anterior.esDestino !== t.esDestino || anterior.esTransito !== t.esTransito ||
+          anterior.repeticiones !== t.repeticiones || anterior.ordenes.join(",") !== t.ordenes.join(",")) {
+          linea?.setTooltipContent(etiquetaTramo(t));
+        }
+        const contorno = refContornos.current.get(t.segmentId);
+        if (t.esRepetido && !contorno && t.puntos.length > 0) {
+          const nuevo = L.polyline(t.puntos, {
+            color: "#0f766e",
+            weight: 12,
+            opacity: 0.35,
+            lineCap: "round",
+            interactive: false,
+          });
+          nuevo.addTo(capas);
+          nuevo.bringToBack();
+          refContornos.current.set(t.segmentId, nuevo);
+        }
+        if (contorno && cambioEstilo) {
+          contorno.setStyle({
+            opacity: t.esRepetido ? (t.esPasoActual ? 0.55 : 0.35) : 0,
+          });
+        }
+      }
+      // Un solo marcador evita miles de elementos DOM y sigue al inicio elegido.
+      refNodos.current?.clearLayers();
+      const inicio = m.nodos.find((n) => n.esInicio);
+      if (inicio && refNodos.current) {
+        const icono = L.divIcon({
+          className: "marcador-nodo marcador-nodo-inicio",
+          html: `<span>${inicio.nodeId.replace(/^N0*/, "N")}</span>`,
+          iconSize: [28, 28], iconAnchor: [14, 14],
+        });
+        L.marker([inicio.lat, inicio.lon], { icon: icono, keyboard: false, title: `Inicio ${inicio.nodeId}` }).addTo(refNodos.current);
       }
     }
+    refDatos.current = new Map(m.tramos.map((t) => [t.segmentId, t]));
+    refHayRecorrido.current = m.hayRecorrido;
     actualizarVehiculo(m);
   }
 
@@ -66,15 +207,19 @@ export function MapViewCliente({ modelo }: { modelo: MapViewModel }) {
     const mapa = refMapa.current;
     if (!L || !mapa) return;
     const actual = m.tramos.find((t) => t.esPasoActual);
-    if (!actual || actual.puntos.length === 0) {
+    const puntos = actual?.puntosOrientados ?? actual?.puntos;
+    if (!actual || !puntos || puntos.length < 2) {
       refVehiculo.current?.remove();
       refVehiculo.current = null;
+      refFlecha.current?.remove();
+      refFlecha.current = null;
       return;
     }
-    const [a, b] = [actual.puntos[0], actual.puntos[actual.puntos.length - 1]];
-    const medio: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    const posicion = puntoMedioEnLinea(puntos);
+    if (!posicion) return;
+    const { punto: medio, angulo } = posicion;
+
     if (!refVehiculo.current) {
-      // Camión en SVG en línea (estilo lucide), sin depender de fuentes emoji.
       const icono: DivIcon = L.divIcon({
         html: "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2'/><path d='M15 18H9'/><path d='M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14'/><circle cx='17' cy='18' r='2'/><circle cx='7' cy='18' r='2'/></svg>",
         className: "marcador-vehiculo",
@@ -91,9 +236,26 @@ export function MapViewCliente({ modelo }: { modelo: MapViewModel }) {
       refVehiculo.current.setLatLng(medio);
     }
     refVehiculo.current.bindTooltip(`Vehículo recolector: tramo ${actual.segmentId}`);
+
+    const iconoFlecha: DivIcon = L.divIcon({
+      className: "marcador-flecha",
+      html: `<span style="display:inline-block;transform:rotate(${angulo}deg)">➤</span>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    if (!refFlecha.current) {
+      refFlecha.current = L.marker(medio, {
+        icon: iconoFlecha,
+        interactive: false,
+        keyboard: false,
+        zIndexOffset: 900,
+      }).addTo(mapa);
+    } else {
+      refFlecha.current.setLatLng(medio);
+      refFlecha.current.setIcon(iconoFlecha);
+    }
   }
 
-  // Montaje único del mapa (con limpieza para StrictMode).
   useEffect(() => {
     let cancelado = false;
     let mapa: MapaLeaflet | null = null;
@@ -102,7 +264,14 @@ export function MapViewCliente({ modelo }: { modelo: MapViewModel }) {
       const L = await import("leaflet");
       if (cancelado || !refDiv.current || refMapa.current) return;
       refL.current = L;
-      mapa = L.map(refDiv.current).setView(refModelo.current.centro, 15);
+      mapa = L.map(refDiv.current, { preferCanvas: true }).setView(refModelo.current.centro, 15);
+      mapa.on("moveend", () => {
+        const bounds = mapa?.getBounds();
+        if (bounds) refLimitesChange.current?.({
+          sur: bounds.getSouth(), norte: bounds.getNorth(),
+          oeste: bounds.getWest(), este: bounds.getEast(),
+        });
+      });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
           '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -122,23 +291,28 @@ export function MapViewCliente({ modelo }: { modelo: MapViewModel }) {
         refMapa.current = null;
         refCapas.current = null;
         refLineas.current = new Map();
+        refContornos.current = new Map();
+        refSeleccionCapas.current = new Map();
+        refNodos.current = null;
         refVehiculo.current = null;
+        refFlecha.current = null;
         refAjuste.current = null;
+        refEncuadreInicial.current = false;
+        refDatos.current = new Map();
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cada modelo nuevo redibuja capas; el mapa persiste.
   useEffect(() => {
     dibujar(modelo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modelo]);
+  }, [modelo, tramoSeleccionadoId]);
 
   return (
     <div
       ref={refDiv}
-      style={{ height: 400, width: "100%" }}
+      style={{ height: 480, width: "100%" }}
       data-testid="map-view"
       role="img"
       aria-label="Mapa del escenario con el recorrido planificado"
@@ -146,10 +320,11 @@ export function MapViewCliente({ modelo }: { modelo: MapViewModel }) {
   );
 }
 
-function estilo(t: TramoVisible) {
+function estilo(t: TramoVisible, hayRecorrido: boolean, seleccionado = false) {
+  const fueraDeRuta = hayRecorrido && !t.enRecorrido;
   return {
-    color: colorTramo(t),
-    weight: t.esPasoActual ? 8 : t.esDestino ? 6 : 4,
+    color: seleccionado && !t.esPasoActual ? "#7c3aed" : colorTramo(t),
+    weight: seleccionado ? 10 : t.esPasoActual ? 9 : t.esRepetido ? 7 : t.esDestino ? 6 : 4,
     dashArray: t.esTransito
       ? "3 8"
       : t.prioridad === "medium"
@@ -157,11 +332,13 @@ function estilo(t: TramoVisible) {
         : t.prioridad === "low"
           ? "2 7"
           : undefined,
-    opacity: t.esPasoActual ? 1 : 0.8,
+    opacity: t.esPasoActual ? 1 : fueraDeRuta ? 0.25 : t.esRepetido ? 0.95 : 0.85,
+    className: "cursor-pointer",
   };
 }
 
 function colorTramo(t: TramoVisible): string {
+  if (t.esPasoActual) return "#047857";
   if (t.esTransito) return "#52525b";
   if (t.prioridad === "high") return "#dc2626";
   if (t.prioridad === "medium") return "#d97706";
@@ -170,8 +347,13 @@ function colorTramo(t: TramoVisible): string {
 }
 
 function etiquetaTramo(t: TramoVisible): string {
-  const paso = t.esDestino ? "Destino obligatorio" : t.esTransito ? "Conexión de tránsito" : "Tramo";
-  const orden = t.ordenes.length > 0 ? ` · pasos ${t.ordenes.map((n) => n + 1).join(", ")}` : "";
-  const repeticiones = t.repeticiones > 1 ? ` · ${t.repeticiones} recorridos` : "";
+  const paso = t.esDestino
+    ? "Destino obligatorio"
+    : t.esTransito
+      ? "Conexión de tránsito"
+      : "Tramo";
+  const orden =
+    t.ordenes.length > 0 ? ` · pasos ${t.ordenes.map((n) => n + 1).join(", ")}` : "";
+  const repeticiones = t.esRepetido ? ` · repetido ×${t.repeticiones}` : "";
   return `${paso}: ${t.segmentId}${orden}${repeticiones}`;
 }

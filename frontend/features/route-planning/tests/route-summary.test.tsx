@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { EstadoVista } from "../../../components/operation-status";
 import { LeyendaPrioridades } from "../components/priority-legend";
 import { ResumenRecorrido } from "../components/route-summary";
@@ -36,18 +36,32 @@ describe("presentación: estados con datos controlados", () => {
     expect(screen.getByRole("status").textContent).toContain("impossible-route");
   });
 
-  it("leyenda con etiqueta y patrón (no solo color)", () => {
+  it("leyenda con etiqueta, patrón, repetición y paso actual", () => {
     render(<LeyendaPrioridades />);
-    expect(screen.getByText(/Alta —/)).toBeDefined();
-    expect(screen.getByText(/Media —/)).toBeDefined();
-    expect(screen.getByText(/Baja —/)).toBeDefined();
+    expect(screen.getByText(/Cómo leer el mapa/i)).toBeDefined();
+    expect(screen.getByText(/^Alta$/)).toBeDefined();
+    expect(screen.getByText(/^Media$/)).toBeDefined();
+    expect(screen.getByText(/^Baja$/)).toBeDefined();
+    expect(screen.getAllByText(/contorno verde agua/i).length).toBeGreaterThan(0);
+    expect(screen.getByText(/Paso actual/i)).toBeDefined();
+    expect(screen.getByText(/Tránsito/i)).toBeDefined();
   });
 
   it("resumen muestra pasos, repetidos y costo del backend", () => {
+    const onSelectPaso = vi.fn();
     const pasos = conRepeticiones(["T0001", "T0002", "T0001"]);
-    render(<ResumenRecorrido pasos={pasos} costo={costFixture} />);
+    render(
+      <ResumenRecorrido
+        pasos={pasos}
+        costo={costFixture}
+        pasoActual={2}
+        onSelectPaso={onSelectPaso}
+      />,
+    );
     expect(screen.getByText(/3 pasos/)).toBeDefined();
-    expect(screen.getByText(/repetido/)).toBeDefined();
-    expect(screen.getByText(new RegExp(String(costFixture.totalCostM)))).toBeDefined();
+    expect(screen.getAllByText(/repetido/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/301[,.]8 m/)).toBeDefined();
+    fireEvent.click(screen.getByRole("button", { name: /Paso 1: tramo T0001/i }));
+    expect(onSelectPaso).toHaveBeenCalledWith(0);
   });
 });

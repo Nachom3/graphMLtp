@@ -139,6 +139,15 @@ con escala se acerca pero confunde medias/altas vecinas, knn queda en el
 medio (solo falla 2 medias → baja) y svc empata al árbol pero pierde en
 interpretabilidad y costo. El 1.0 en test no prueba utilidad operativa.
 
+### Resumen para la defensa
+
+Elegimos el árbol porque obtuvo el mejor F1 en nuestra validación, empatado con
+SVC, y porque sus decisiones se pueden visualizar y explicar con más facilidad.
+No afirmamos que sea siempre superior a KNN: los resultados dependen de la
+partición y del procedimiento. Además, como las etiquetas son sintéticas, las
+métricas miden qué tan bien el modelo aprende la regla construida, no su eficacia
+real en la recolección.
+
 ## Etiquetas y variables (sintéticas)
 
 - `X`: `cantidad_contenedores`, `dias_desde_ultima_recoleccion`,

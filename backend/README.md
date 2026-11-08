@@ -111,6 +111,8 @@ leen. Errores: `INVALID_DATASET` (fuente/esquema/invariantes),
 `ValueError` (modelo desconocido o tramo inválido) y
 `PREDICTION_WITHOUT_SEGMENT` (salida sin 1:1).
 
+Ejemplo histórico del piloto (no genera el artefacto predeterminado de ciudad):
+
 Pipeline ajustado (identificación y carga): `model_id` `"arbol"` (elegido
 en #10 por validación). Generación offline con la metodología #10
 (`prepare_dataset` seed 0 -> `build_pipeline("arbol", ...)` con
@@ -150,7 +152,17 @@ operativo real. Ver `docs/modelo-comparacion.md` y `PLAN.md`.
 
 ## API v1 local
 
-La API expone el escenario piloto, predicción con el árbol ajustado y
+La API usa por defecto `dataset/salida-montevideo/`, con nodos, tramos y
+`geometrias.geojson` generados con `python scripts/build_dataset.py --montevideo`.
+La variable `COLLECTION_SCENARIO_SOURCE` permite apuntar explícitamente a otro
+directorio compatible; no se sustituye por un fixture si faltan los datos.
+`GET /scenario` devuelve las polilíneas IDE WGS84 `[lon, lat]` por `segment_id`
+y responde `SCENARIO_UNAVAILABLE` si faltan o no coinciden con los tramos.
+El modelo predeterminado es `backend/artifacts/arbol-montevideo.joblib`; se genera
+con `python scripts/generate_arbol_artifact.py` sobre el CSV de ciudad. Las
+métricas históricas del piloto no validan por sí solas ese árbol reentrenado.
+
+La API expone predicción con el árbol ajustado y
 planificación de recorridos. El contrato HTTP en inglés está en
 [`docs/contracts/api-v1.md`](../docs/contracts/api-v1.md). Las rutas son
 `GET /health`, `GET /scenario`, `POST /predictions:predict` y

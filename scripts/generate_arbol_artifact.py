@@ -2,12 +2,12 @@
 
 Methodology #10: prepare_dataset(seed) -> build_pipeline("arbol", ...) with
 max_depth=None, min_samples_split=2 -> fit on train only -> joblib dump to
-backend/artifacts/arbol.joblib (not versioned). Inference never trains.
+backend/artifacts/arbol-montevideo.joblib (not versioned). Inference never trains.
 
 Usage (from repo root)::
 
     python scripts/generate_arbol_artifact.py
-    python scripts/generate_arbol_artifact.py --source dataset/salida/tramos.csv --seed 0 --output backend/artifacts/arbol.joblib
+    python scripts/generate_arbol_artifact.py --source dataset/salida-montevideo/tramos.csv --seed 0 --output backend/artifacts/arbol-montevideo.joblib
 """
 from __future__ import annotations
 
@@ -27,11 +27,13 @@ from collection.adapters.models.pipeline_store import save_pipeline
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate the fitted arbol artifact (offline).")
-    parser.add_argument("--source", default="dataset/salida/tramos.csv")
+    parser.add_argument("--source", default="dataset/salida-montevideo/tramos.csv")
     parser.add_argument("--seed", type=int, default=0)
-    parser.add_argument("--output", default="backend/artifacts/arbol.joblib")
+    parser.add_argument("--output", default="backend/artifacts/arbol-montevideo.joblib")
     args = parser.parse_args()
 
+    if not Path(args.source).is_file():
+        parser.error(f"no existe {args.source}; generá primero el dataset con python scripts/build_dataset.py --montevideo")
     prepared = prepare_dataset(args.source, seed=args.seed)
     pipe = build_pipeline("arbol", prepared.preprocessor, seed=args.seed)
     pipe.set_params(

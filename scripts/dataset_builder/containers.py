@@ -6,7 +6,8 @@ from collections import Counter, defaultdict
 
 import networkx as nx
 import pandas as pd
-from shapely.geometry import Point
+from shapely import STRtree
+from shapely.geometry import Point, box
 
 from .config import _INV, BBOX_WGS, CONTAINERS_JSON, SMARTWASTE_CSV, SNAP_RADIUS_M
 
@@ -43,13 +44,25 @@ def _in_bbox(lon: float, lat: float) -> bool:
     )
 
 
-def _nearest_tramo(tramos: list[dict], lon: float, lat: float) -> tuple[str, float]:
+def _nearest_tramo(
+    tramos: list[dict], lon: float, lat: float, *, tree: STRtree | None = None
+) -> tuple[str, float]:
     """(tramo_id, dist_m) del tramo mas cercano a (lon, lat)."""
     x, y = _INV.transform(lon, lat)
     pt = Point(x, y)
+    if not tramos:
+        return "", float("inf")
+    index = tree if tree is not None else STRtree([t["utm"] for t in tramos])
+    nearest = int(index.nearest(pt))
+    nearest_distance = tramos[nearest]["utm"].distance(pt)
+    # Legacy selection rounds distances to millimetres *before* tie-breaking
+    # on ID. Include near-ties, not just exactly equidistant tree results.
+    radius = nearest_distance + 0.001
+    candidates = index.query(box(x - radius, y - radius, x + radius, y + radius))
     best_d = float("inf")
     best_tid = ""
-    for t in tramos:
+    for candidate in candidates:
+        t = tramos[int(candidate)]
         d = round(t["utm"].distance(pt), 3)
         if (d, t["tramo_id"]) < (best_d, best_tid):
             best_d = d
@@ -72,8 +85,9 @@ def snap_containers(
     assignments = []
     unassigned = []
     dists = []
+    tree = STRtree([t["utm"] for t in tramos])
     for c in containers:
-        tid, d = _nearest_tramo(tramos, c["long"], c["lat"])
+        tid, d = _nearest_tramo(tramos, c["long"], c["lat"], tree=tree)
         if d > SNAP_RADIUS_M:
             unassigned.append(c)
         else:
@@ -116,7 +130,7 @@ def validate_circuits(tramos: list[dict], assignments: list) -> dict:
     return report
 
 
-def crosscheck_smartwaste() -> dict[str, int]:
+def crosscheck_smartwaste(*, full_city: bool = False) -> dict[str, int]:
     """Cross-check con SmartWaste (fuente independiente): contenedores en el
     piloto agrupados por circuit_id."""
     df = pd.read_csv(SMARTWASTE_CSV, dtype={"circuit_id": str})
@@ -130,7 +144,7 @@ def crosscheck_smartwaste() -> dict[str, int]:
             continue
         if isinstance(lat, float) and pd.isna(lat):
             continue
-        if _in_bbox(float(lon), float(lat)):
+        if full_city or _in_bbox(float(lon), float(lat)):
             out[str(rec["circuit_id"]).strip()] += 1
     return dict(out)
 

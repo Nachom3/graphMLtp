@@ -36,6 +36,8 @@ export interface Segment {
   containerCount: number;
   daysSinceLastCollection: number;
   historicNeighborComplaints: number;
+  /** Trazado WGS84 para Leaflet ([latitud, longitud]); ausente en fixtures sin geometría. */
+  geometry?: [number, number][];
 }
 
 export interface Scenario {

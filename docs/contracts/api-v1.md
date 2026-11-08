@@ -22,24 +22,30 @@ Returns `{"status":"ok","version":"v1","schema":"v1"}`.
 
 ### `GET /scenario`
 
-Returns the bundled pilot scenario:
+Returns the generated full-city dataset by default (`dataset/salida-montevideo/`).
+Each geometry is the clipped/split IDE street line, in WGS84 `[longitude, latitude]`
+and oriented from `origin_node` to `destination_node`:
 
 ```json
 {
-  "scenario_id": "pilot",
+  "scenario_id": "montevideo",
   "version": "v1",
   "nodes": [{"node_id": "N0001", "lon": -56.155, "lat": -34.91}],
   "segments": [{
     "segment_id": "T0001", "origin_node": "N0001",
     "destination_node": "N0002", "length_m": 85.5,
     "zone_type": "residential", "container_count": 1,
-    "days_since_last_collection": 2, "historic_neighbor_complaints": 0
+    "days_since_last_collection": 2, "historic_neighbor_complaints": 0,
+    "geometry": {"type":"LineString", "coordinates":[[-56.155,-34.91],[-56.1545,-34.9102],[-56.154,-34.91]]}
   }]
 }
 ```
 
-The actual response includes the full fixture. The client cannot select an
-arbitrary filesystem path.
+The server administrator may set `COLLECTION_SCENARIO_SOURCE` to an alternate
+compatible dataset directory. Missing or inconsistent geometry returns
+`SCENARIO_UNAVAILABLE`; there is no silent fallback to the test fixture.
+Explicitly injected legacy fixtures can omit geometry (`null`). The client cannot
+select an arbitrary filesystem path.
 
 ### `POST /predictions:predict`
 
@@ -118,6 +124,7 @@ Error bodies use `{"detail":{"code":"...","detail":"..."}}`.
 | 422 | `PREDICTION_WITHOUT_SEGMENT` | Predictor output cannot be matched 1:1 to input |
 | 422 | `MODEL_UNKNOWN` | Unsupported model identifier |
 | 503 | `MODEL_UNAVAILABLE` | Fitted model artifact is unavailable |
+| 503 | `SCENARIO_UNAVAILABLE` | Scenario data or its geometries are missing or inconsistent |
 
 ## OpenAPI
 
