@@ -37,6 +37,10 @@ const PRIORITIES: { value: Priority; label: string }[] = [
 // Límite conservador de trabajo interactivo; no promete un tiempo máximo.
 const MAX_TRAMOS_CALCULO = 300;
 const TRAMOS_POR_PAGINA = 100;
+// Escenarios chicos (piloto/e2e): se predicen todos los tramos al cargar.
+// Montevideo (46k): se predice solo el área visible, por vista.
+const UMBRAL_PREDICCION_GLOBAL = 2500;
+const MAX_TRAMOS_PREDICCION = 2000;
 
 const ZONA_ES: Record<ZoneType, string> = {
   residential: "Residencial",
@@ -124,26 +128,32 @@ export default function PlanificadorDemo() {
       }
       setScenario(valid.datos);
       setStartNodeId(valid.datos.nodes[0]?.nodeId ?? "");
-      const predicted = await solicitarPrioridades(
-        gateway,
-        new RequestStore(),
-        "arbol",
-        valid.datos.segments,
-      );
-      if (!active) return;
       setLoading(false);
-      if (predicted.estado !== "exito") {
-        setMessage(
-          predicted.estado === "error"
-            ? errorText(predicted.error)
-            : predicted.estado === "vacio"
-              ? predicted.motivo
-              : "No se pudieron obtener prioridades.",
+      if (valid.datos.segments.length <= UMBRAL_PREDICCION_GLOBAL) {
+        const predicted = await solicitarPrioridades(
+          gateway,
+          new RequestStore(),
+          "arbol",
+          valid.datos.segments,
         );
-        return;
+        if (!active) return;
+        if (predicted.estado !== "exito") {
+          setMessage(
+            predicted.estado === "error"
+              ? errorText(predicted.error)
+              : predicted.estado === "vacio"
+                ? predicted.motivo
+                : "No se pudieron obtener prioridades.",
+          );
+          return;
+        }
+        setPriorities(predicted.datos);
+        setMessage("Escenario cargado y prioridades calculadas por el árbol.");
+      } else {
+        setMessage(
+          `Escenario grande (${valid.datos.segments.length} tramos): acercá el mapa para predecir y colorear el área visible.`,
+        );
       }
-      setPriorities(predicted.datos);
-      setMessage("Escenario cargado y prioridades calculadas por el árbol.");
     }
     void load();
     return () => {
@@ -234,6 +244,28 @@ export default function PlanificadorDemo() {
       active = false;
     };
   }, [gateway, tramoSeleccionado]);
+
+  const esEscenarioGrande = (scenario?.segments.length ?? 0) > UMBRAL_PREDICCION_GLOBAL;
+
+  useEffect(() => {
+    if (!esEscenarioGrande || !areaVisible || areaVisible.tramos.length === 0) return;
+    if (areaVisible.tramos.length > MAX_TRAMOS_PREDICCION) return;
+    let active = true;
+    void solicitarPrioridades(gateway, new RequestStore(), "arbol", areaVisible.tramos).then((resultado) => {
+      if (!active) return;
+      if (resultado.estado === "exito") {
+        setPriorities(resultado.datos);
+        setMessage(
+          `Prioridades del área calculadas por el árbol (${resultado.datos.length} tramos). Elegí prioridades, inicio y solicitá el circuito.`,
+        );
+      } else if (resultado.estado === "error") {
+        setMessage(`No se pudieron predecir las prioridades del área: ${errorText(resultado.error)} Movete o acercá para reintentar.`);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [gateway, esEscenarioGrande, areaVisible]);
 
   useEffect(() => {
     if (!mostrarContenedores || !limites) return;
