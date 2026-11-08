@@ -1,5 +1,6 @@
 import type { ApiGateway, RoutePlanInput } from "../application/usecases";
 import type {
+  ContainerPoint,
   ModelId,
   OperationError,
   Priority,
@@ -8,7 +9,9 @@ import type {
   RouteStep,
   Scenario,
   Segment,
+  SegmentExplanation,
   SegmentId,
+  VentanaMapa,
 } from "../domain/types";
 import { conRepeticiones } from "../domain/types";
 import { demoScenario } from "./demoScenario";
@@ -77,6 +80,42 @@ export class FakeGateway implements ApiGateway {
       }
       return { segmentId: s.segmentId, priority };
     });
+  }
+
+  async explainPriority(
+    modelId: ModelId,
+    segment: Segment,
+    signal?: AbortSignal,
+  ): Promise<SegmentExplanation> {
+    await this.step(signal);
+    const priority = this.priorities[segment.segmentId];
+    if (!priority) {
+      throw { code: "prediction-without-segment", detail: segment.segmentId } satisfies OperationError;
+    }
+    void modelId;
+    return {
+      segmentId: segment.segmentId,
+      priority,
+      score: {
+        daysWeighted: 2 * segment.daysSinceLastCollection,
+        containersWeighted: segment.containerCount,
+        zoneW: 0,
+        complaintsWeighted: 2 * segment.historicNeighborComplaints,
+        total: 2 * segment.daysSinceLastCollection + segment.containerCount + 2 * segment.historicNeighborComplaints,
+      },
+      path: [{ node: 0, leaf: true }],
+    };
+  }
+
+  async listContainers(
+    ventana: VentanaMapa,
+    limit = 2000,
+    signal?: AbortSignal,
+  ): Promise<{ points: ContainerPoint[]; total: number; truncated: boolean }> {
+    await this.step(signal);
+    void ventana;
+    void limit;
+    return { points: [], total: 0, truncated: false };
   }
 
   async planRoute(

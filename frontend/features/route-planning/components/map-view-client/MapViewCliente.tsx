@@ -15,11 +15,22 @@ import { puntoMedioEnLinea, type LimitesMapa, type MapViewModel, type TramoVisib
  * recrear el mapa (la animación del vehículo no parpadea).
  * Recibe solo el view-model puro, nunca entidades del backend.
  */
-export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, onSeleccionarTramo }: {
+/** Punto de contenedor de levante para la capa opcional del mapa. */
+export interface PuntoContenedor {
+  lon: number;
+  lat: number;
+  days?: number;
+}
+
+export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, onSeleccionarTramo, contenedores, mostrarContenedores, fijarInicioActivo, onFijarInicio }: {
   modelo: MapViewModel;
   onLimitesChange?: (limites: LimitesMapa) => void;
   tramoSeleccionadoId?: string | null;
   onSeleccionarTramo?: (segmentId: string) => void;
+  contenedores?: PuntoContenedor[];
+  mostrarContenedores?: boolean;
+  fijarInicioActivo?: boolean;
+  onFijarInicio?: (nodo: { nodeId: string; lat: number; lon: number }) => void;
 }) {
   const refDiv = useRef<HTMLDivElement | null>(null);
   const refL = useRef<typeof import("leaflet") | null>(null);
@@ -39,12 +50,17 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
   const refSeleccionado = useRef(tramoSeleccionadoId);
   const refOnSeleccionar = useRef(onSeleccionarTramo);
   const refSeleccionCapas = useRef<Map<string, Polyline>>(new Map());
+  const refContenedores = useRef<LayerGroup | null>(null);
+  const refContenedoresProps = useRef({ contenedores, mostrarContenedores });
+  const refFijarInicio = useRef({ fijarInicioActivo, onFijarInicio });
 
   useEffect(() => {
     refModelo.current = modelo;
     refLimitesChange.current = onLimitesChange;
     refSeleccionado.current = tramoSeleccionadoId;
     refOnSeleccionar.current = onSeleccionarTramo;
+    refContenedoresProps.current = { contenedores, mostrarContenedores };
+    refFijarInicio.current = { fijarInicioActivo, onFijarInicio };
   });
 
   function dibujar(m: MapViewModel) {
@@ -109,14 +125,14 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
       for (const n of m.nodos.filter((n) => n.esInicio)) {
         const icono: DivIcon = L.divIcon({
           className: n.esInicio ? "marcador-nodo marcador-nodo-inicio" : "marcador-nodo",
-          html: `<span>${n.nodeId.replace(/^N0*/, "N")}</span>`,
-          iconSize: [28, 28],
-          iconAnchor: [14, 14],
+          html: `<span>INICIO ${n.nodeId.replace(/^N0*/, "N")}</span>`,
+          iconSize: [84, 32],
+          iconAnchor: [42, 16],
         });
         L.marker([n.lat, n.lon], {
           icon: icono,
           keyboard: false,
-          title: n.esInicio ? `Inicio ${n.nodeId}` : n.nodeId,
+          title: `INICIO ${n.nodeId}: el circuito empieza y termina acá`,
         }).addTo(refNodos.current);
       }
 
@@ -191,10 +207,10 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
       if (inicio && refNodos.current) {
         const icono = L.divIcon({
           className: "marcador-nodo marcador-nodo-inicio",
-          html: `<span>${inicio.nodeId.replace(/^N0*/, "N")}</span>`,
-          iconSize: [28, 28], iconAnchor: [14, 14],
+          html: `<span>INICIO ${inicio.nodeId.replace(/^N0*/, "N")}</span>`,
+          iconSize: [84, 32], iconAnchor: [42, 16],
         });
-        L.marker([inicio.lat, inicio.lon], { icon: icono, keyboard: false, title: `Inicio ${inicio.nodeId}` }).addTo(refNodos.current);
+        L.marker([inicio.lat, inicio.lon], { icon: icono, keyboard: false, title: `INICIO ${inicio.nodeId}: el circuito empieza y termina acá` }).addTo(refNodos.current);
       }
     }
     refDatos.current = new Map(m.tramos.map((t) => [t.segmentId, t]));
@@ -256,6 +272,34 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
     }
   }
 
+  /** Capa opcional de contenedores: se redibuja desde los props vigentes. */
+  function dibujarContenedores() {
+    const L = refL.current;
+    const mapa = refMapa.current;
+    if (!L || !mapa) return;
+    const { contenedores, mostrarContenedores } = refContenedoresProps.current;
+    refContenedores.current?.remove();
+    refContenedores.current = null;
+    if (!mostrarContenedores || !contenedores || contenedores.length === 0) return;
+    const grupo = L.layerGroup();
+    for (const p of contenedores.slice(0, 2000)) {
+      L.circleMarker([p.lat, p.lon], {
+        radius: 3,
+        color: "#0ea5e9",
+        weight: 1,
+        opacity: 0.9,
+        fillOpacity: 0.7,
+        interactive: true,
+      })
+        .bindTooltip(
+          `Contenedor${p.days !== undefined ? ` · ${p.days} días sin recolección` : ""}`,
+        )
+        .addTo(grupo);
+    }
+    grupo.addTo(mapa);
+    refContenedores.current = grupo;
+  }
+
   useEffect(() => {
     let cancelado = false;
     let mapa: MapaLeaflet | null = null;
@@ -271,6 +315,21 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
           sur: bounds.getSouth(), norte: bounds.getNorth(),
           oeste: bounds.getWest(), este: bounds.getEast(),
         });
+      });
+      mapa.on("click", (evento: { latlng: { lat: number; lng: number } }) => {
+        const { fijarInicioActivo, onFijarInicio } = refFijarInicio.current;
+        if (!fijarInicioActivo) return;
+        const nodos = refModelo.current.nodos;
+        let mejor: { nodeId: string; lat: number; lon: number } | null = null;
+        let mejorDist = Infinity;
+        for (const n of nodos) {
+          const dist = Math.hypot(n.lat - evento.latlng.lat, n.lon - evento.latlng.lng);
+          if (dist < mejorDist) {
+            mejorDist = dist;
+            mejor = { nodeId: n.nodeId, lat: n.lat, lon: n.lon };
+          }
+        }
+        if (mejor) onFijarInicio?.(mejor);
       });
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution:
@@ -293,6 +352,7 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
         refLineas.current = new Map();
         refContornos.current = new Map();
         refSeleccionCapas.current = new Map();
+        refContenedores.current = null;
         refNodos.current = null;
         refVehiculo.current = null;
         refFlecha.current = null;
@@ -308,6 +368,10 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
     dibujar(modelo);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelo, tramoSeleccionadoId]);
+
+  useEffect(() => {
+    dibujarContenedores();
+  }, [contenedores, mostrarContenedores, modelo]);
 
   return (
     <div

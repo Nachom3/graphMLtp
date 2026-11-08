@@ -48,3 +48,20 @@ class PredictPriorities(PredictPrioritiesContract):
                     f"pero llegó {item.segment_id!r}"
                 )
         return predicted
+
+    def explain(self, model_id: str, segment: SegmentFeatures) -> dict:
+        """Explain one prediction via the fitted predictor, if it supports it."""
+        if model_id != self._predictor.model_id:
+            raise ValueError(
+                f"modelo desconocido: {model_id!r}; disponible: {self._predictor.model_id!r}"
+            )
+        issues = validate_segment_features(segment)
+        if issues:
+            raise ValueError("; ".join(issues))
+        explain = getattr(self._predictor, "explain", None)
+        if not callable(explain):
+            raise ValueError("explicación no disponible para este predictor")
+        result = explain(segment)
+        if not isinstance(result, dict):
+            raise ValueError("explicación no disponible para este predictor")
+        return result

@@ -1,4 +1,5 @@
 import type {
+  ContainerPoint,
   ModelComparison,
   ModelId,
   OperationError,
@@ -9,6 +10,8 @@ import type {
   RouteStep,
   Scenario,
   Segment,
+  SegmentExplanation,
+  VentanaMapa,
 } from "../domain/types";
 import { conRepeticiones } from "../domain/types";
 
@@ -26,6 +29,16 @@ export interface ApiGateway {
     segments: Segment[],
     signal?: AbortSignal,
   ): Promise<PriorityForSegment[]>;
+  explainPriority(
+    modelId: ModelId,
+    segment: Segment,
+    signal?: AbortSignal,
+  ): Promise<SegmentExplanation>;
+  listContainers(
+    ventana: VentanaMapa,
+    limit?: number,
+    signal?: AbortSignal,
+  ): Promise<{ points: ContainerPoint[]; total: number; truncated: boolean }>;
   planRoute(
     input: RoutePlanInput,
     signal?: AbortSignal,
@@ -160,6 +173,30 @@ export function solicitarPrioridades(
   return ejecutar(store, gw.predictPriorities(modelId, segments, signal), (ps) =>
     ps.length === 0 ? "sin prioridades" : null,
   );
+}
+
+export function solicitarExplicacion(
+  gw: ApiGateway,
+  store: RequestStore,
+  modelId: ModelId,
+  segment: Segment,
+  signal?: AbortSignal,
+): Promise<OperationState<SegmentExplanation>> {
+  return ejecutar(store, gw.explainPriority(modelId, segment, signal), (explicacion) =>
+    explicacion.path.length === 0 ? "sin explicación" : null,
+  );
+}
+
+export function solicitarContenedores(
+  gw: ApiGateway,
+  store: RequestStore,
+  ventana: VentanaMapa,
+  limit = 2000,
+  signal?: AbortSignal,
+): Promise<
+  OperationState<{ points: ContainerPoint[]; total: number; truncated: boolean }>
+> {
+  return ejecutar(store, gw.listContainers(ventana, limit, signal), () => null);
 }
 
 export function solicitarRecorrido(

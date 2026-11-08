@@ -138,4 +138,49 @@ describe("httpGateway: backend en inglés, único lugar con fetch", () => {
     );
     await expect(gw.health()).rejects.toMatchObject({ code: "network" });
   });
+
+  it("explicar traduce snake_case y conserva el camino del árbol", async () => {
+    mockFetchOnce((url, init) => {
+      expect(url).toContain("/predictions:explain");
+      const body = JSON.parse(String(init?.body));
+      expect(body.model_id).toBe("arbol");
+      expect(body.segment).toMatchObject({ segment_id: "T0001" });
+      return jsonRes({
+        segment_id: "T0001",
+        priority: "high",
+        score: { days_weighted: 0, containers_weighted: 3, zone_w: 0, complaints_weighted: 0, total: 3 },
+        path: [
+          { node: 0, feature: "remainder__cantidad_contenedores", threshold: 1.5, value: 3, direction: "derecha (>)" },
+          { node: 2, leaf: true },
+        ],
+      });
+    });
+    const gw = crearHttpGateway("http://test");
+    const res = await gw.explainPriority("arbol", scenarioFixture.segments[0]);
+    expect(res.segmentId).toBe("T0001");
+    expect(res.score.total).toBe(3);
+    expect(res.path).toHaveLength(2);
+    expect(res.path[0]).toMatchObject({ direction: "derecha (>)" });
+    expect(res.path[1]).toMatchObject({ leaf: true });
+  });
+
+  it("contenedores pide solo el bbox visible y conserva puntos y conteo", async () => {
+    mockFetchOnce((url) => {
+      expect(url).toContain("/containers?");
+      expect(url).toContain("sur=-34.92");
+      expect(url).toContain("limit=2000");
+      return jsonRes({
+        points: [{ lon: -56.16, lat: -34.91, days: 2 }],
+        total: 1,
+        truncated: false,
+      });
+    });
+    const gw = crearHttpGateway("http://test");
+    const res = await gw.listContainers({ sur: -34.92, norte: -34.9, oeste: -56.17, este: -56.14 });
+    expect(res).toEqual({
+      points: [{ lon: -56.16, lat: -34.91, days: 2 }],
+      total: 1,
+      truncated: false,
+    });
+  });
 });

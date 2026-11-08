@@ -12,6 +12,8 @@ Inference never trains: the pipeline arrives already fitted on train.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 import pandas as pd
 
 from ...domain.entities.predicted_segment import PredictedSegment
@@ -23,6 +25,13 @@ _ZONE_TO_ES = {
     "industrial": "industrial",
 }
 _LABEL_TO_EN = {"baja": "low", "media": "medium", "alta": "high"}
+
+# Pesos de la regla sintética #18 (duplican synthetic_complaints sin
+# importar el adapter de datasets desde el adapter de modelos).
+_EXPLAIN_DAYS_WEIGHT = 2
+_EXPLAIN_CONTAINERS_WEIGHT = 1
+_EXPLAIN_ZONE_WEIGHTS = {"residential": 0, "industrial": 1, "commercial": 2}
+_EXPLAIN_COMPLAINT_WEIGHT = 2
 
 
 class SklearnPredictor:
@@ -70,3 +79,93 @@ class SklearnPredictor:
             )
             for seg, label in zip(segments, labels, strict=True)
         ]
+
+    def explain(self, segment: SegmentFeatures) -> dict:
+        """Explain one prediction: rule score + tree decision path.
+
+        Returns ``{"segment_id", "priority", "score", "path"}`` where
+        ``score`` mirrors the synthetic #18 breakdown and ``path`` lists
+        the tree nodes traversed (feature, threshold, value, direction).
+        Only decision trees are supported; other estimators raise
+        ``ValueError`` (the transport maps it to ``EXPLAIN_UNSUPPORTED``).
+        """
+        predicted = self.predict([segment])[0]
+        score = {
+            "days_weighted": _EXPLAIN_DAYS_WEIGHT * segment.days_since_last_collection,
+            "containers_weighted": _EXPLAIN_CONTAINERS_WEIGHT * segment.container_count,
+            "zone_w": _EXPLAIN_ZONE_WEIGHTS[segment.zone_type],
+            "complaints_weighted": _EXPLAIN_COMPLAINT_WEIGHT
+            * segment.historic_neighbor_complaints,
+        }
+        total = (
+            score["days_weighted"]
+            + score["containers_weighted"]
+            + score["zone_w"]
+            + score["complaints_weighted"]
+        )
+        return {
+            "segment_id": segment.segment_id,
+            "priority": predicted.priority,
+            "score": {**score, "total": total},
+            "path": self._decision_path(segment),
+        }
+
+    def _decision_path(self, segment: SegmentFeatures) -> list[dict]:
+        """Return the tree nodes traversed for ``segment``."""
+        pipeline = self._pipeline
+        steps = getattr(pipeline, "steps", None)
+        if not steps:
+            raise ValueError("explicación no disponible: el pipeline no es inspeccionable")
+        preprocessor, estimator = steps[-2][1], steps[-1][1]
+        tree = getattr(estimator, "tree_", None)
+        if tree is None:
+            raise ValueError(
+                f"explicación no disponible: {type(estimator).__name__} no es un árbol"
+            )
+        frame = pd.DataFrame(
+            [
+                {
+                    "cantidad_contenedores": segment.container_count,
+                    "dias_desde_ultima_recoleccion": segment.days_since_last_collection,
+                    "tipo_zona": _ZONE_TO_ES[segment.zone_type],
+                    "historico_quejas_vecinales": segment.historic_neighbor_complaints,
+                }
+            ],
+            columns=[
+                "cantidad_contenedores",
+                "dias_desde_ultima_recoleccion",
+                "tipo_zona",
+                "historico_quejas_vecinales",
+            ],
+        )
+        matrix = preprocessor.transform(frame)
+        feature_names = self._feature_names(preprocessor, matrix.shape[1])
+        node_path = estimator.decision_path(matrix).indices
+        path: list[dict] = []
+        for node_id in node_path:
+            feature_id = tree.feature[node_id]
+            if feature_id < 0:
+                path.append({"node": int(node_id), "leaf": True})
+                continue
+            threshold = float(tree.threshold[node_id])
+            value = float(matrix[0, feature_id])
+            path.append(
+                {
+                    "node": int(node_id),
+                    "feature": feature_names[feature_id],
+                    "threshold": threshold,
+                    "value": value,
+                    "direction": "izquierda (<=)" if value <= threshold else "derecha (>)",
+                }
+            )
+        return path
+
+    @staticmethod
+    def _feature_names(preprocessor: object, n_features: int) -> list[str]:
+        """Best-effort transformed feature names for the tree path."""
+        get_names = getattr(preprocessor, "get_feature_names_out", None)
+        if callable(get_names):
+            names = get_names()
+            if isinstance(names, Iterable):
+                return [str(name) for name in names]
+        return [f"feature_{i}" for i in range(n_features)]

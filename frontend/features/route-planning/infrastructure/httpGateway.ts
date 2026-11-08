@@ -1,5 +1,6 @@
 import type { ApiGateway, RoutePlanInput } from "../application/usecases";
 import type {
+  ContainerPoint,
   ErrorCode,
   ModelComparison,
   ModelId,
@@ -9,6 +10,8 @@ import type {
   RouteCost,
   RouteStep,
   Segment,
+  SegmentExplanation,
+  VentanaMapa,
 } from "../domain/types";
 
 /** DTOs del contrato HTTP en inglés; se traducen en este adaptador. */
@@ -43,6 +46,26 @@ interface PlanDTO {
   transit: string[];
   repeated_distance_m: number;
   coverage: number;
+}
+
+interface ExplainDTO {
+  segment_id: string;
+  priority: "low" | "medium" | "high";
+  score: {
+    days_weighted: number;
+    containers_weighted: number;
+    zone_w: number;
+    complaints_weighted: number;
+    total: number;
+  };
+  path: {
+    node: number;
+    leaf?: boolean;
+    feature?: string;
+    threshold?: number;
+    value?: number;
+    direction?: string;
+  }[];
 }
 
 /** Mapea códigos del backend a códigos estables de presentación. */
@@ -194,6 +217,52 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
       );
       // Asociación inequívoca por segment_id, tal cual la devuelve el backend.
       return dto.predictions.map((p) => ({ segmentId: p.segment_id, priority: p.priority }));
+    },
+    async explainPriority(
+      modelId: ModelId,
+      segment: Segment,
+      signal?: AbortSignal,
+    ): Promise<SegmentExplanation> {
+      const dto = await post<ExplainDTO>(
+        "/predictions:explain",
+        { model_id: modelId, segment: segmentRow(segment) },
+        signal,
+      );
+      return {
+        segmentId: dto.segment_id,
+        priority: dto.priority,
+        score: {
+          daysWeighted: dto.score.days_weighted,
+          containersWeighted: dto.score.containers_weighted,
+          zoneW: dto.score.zone_w,
+          complaintsWeighted: dto.score.complaints_weighted,
+          total: dto.score.total,
+        },
+        path: dto.path.map((p) => ({ ...p })),
+      };
+    },
+    async listContainers(
+      ventana: VentanaMapa,
+      limit = 2000,
+      signal?: AbortSignal,
+    ): Promise<{ points: ContainerPoint[]; total: number; truncated: boolean }> {
+      const params = new URLSearchParams({
+        sur: String(ventana.sur),
+        norte: String(ventana.norte),
+        oeste: String(ventana.oeste),
+        este: String(ventana.este),
+        limit: String(limit),
+      });
+      const dto = await get<{
+        points: { lon: number; lat: number; days: number }[];
+        total: number;
+        truncated: boolean;
+      }>(`/containers?${params.toString()}`, signal);
+      return {
+        points: dto.points.map((p) => ({ lon: p.lon, lat: p.lat, days: p.days })),
+        total: dto.total,
+        truncated: dto.truncated,
+      };
     },
     async planRoute(
       input: RoutePlanInput,

@@ -78,6 +78,32 @@ class PlanRequest(BaseModel):
     start_node_id: str | None = None
 
 
+class ExplainRequest(BaseModel):
+    model_id: str
+    segment: SegmentDTO
+
+
+_CONTAINERS_CACHE: list[dict] | None = None
+
+
+def _load_container_points() -> list[dict]:
+    """Read levante container coordinates once per process (10k rows)."""
+    global _CONTAINERS_CACHE
+    cached = _CONTAINERS_CACHE
+    if cached is None:
+        import json
+
+        path = Path(__file__).resolve().parents[4] / "dataset" / "09_levantes" / "containers.json"
+        try:
+            cached = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise FileNotFoundError(
+                "contenedores no disponibles: falta dataset/09_levantes/containers.json"
+            ) from None
+        _CONTAINERS_CACHE = cached
+    return cached
+
+
 def _error(status_code: int, code: str, detail: str) -> JSONResponse:
     return JSONResponse(
         status_code=status_code,
@@ -154,6 +180,52 @@ def create_router(
         return {
             "model_id": body.model_id,
             "predictions": [prediction.__dict__ for prediction in predictions],
+        }
+
+    @router.post("/predictions:explain", response_model=None)
+    def explain(body: ExplainRequest) -> dict | JSONResponse:
+        try:
+            use_case = predict_use_case or create_predict_priorities_use_case(
+                model_id=body.model_id
+            )
+            return use_case.explain(body.model_id, body.segment.to_entity())  # type: ignore[no-any-return]
+        except FileNotFoundError as exc:
+            return _error(503, "MODEL_UNAVAILABLE", str(exc))
+        except ValueError as exc:
+            lowered = str(exc).lower()
+            if "desconocido" in lowered:
+                code = "MODEL_UNKNOWN"
+            elif "explicación no disponible" in lowered or "no es un árbol" in lowered:
+                code = "EXPLAIN_UNSUPPORTED"
+            else:
+                code = "INVALID_DATASET"
+            return _error(422, code, str(exc))
+
+    @router.get("/containers", response_model=None)
+    def containers(
+        sur: float, norte: float, oeste: float, este: float, limit: int = 2000
+    ) -> dict | JSONResponse:
+        if sur > norte or oeste > este:
+            return _error(422, "INVALID_REQUEST", "bbox inválido: sur<=norte y oeste<=este")
+        if limit < 0:
+            return _error(422, "INVALID_REQUEST", "limit debe ser >= 0")
+        try:
+            points = _load_container_points()
+        except FileNotFoundError as exc:
+            return _error(503, "SCENARIO_UNAVAILABLE", str(exc))
+        dentro = [
+            {"lon": p["long"], "lat": p["lat"], "days": p.get("daysWithoutLift", 0)}
+            for p in points
+            if isinstance(p.get("lat"), (int, float))
+            and isinstance(p.get("long"), (int, float))
+            and sur <= p["lat"] <= norte
+            and oeste <= p["long"] <= este
+        ]
+        recorte = dentro[:limit]
+        return {
+            "points": recorte,
+            "total": len(dentro),
+            "truncated": len(dentro) > len(recorte),
         }
 
     @router.post("/routes:plan", response_model=None)

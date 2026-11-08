@@ -5,21 +5,26 @@ import {
   cargarEscenario,
   obtenerEscenario,
   RequestStore,
+  solicitarContenedores,
+  solicitarExplicacion,
   solicitarPrioridades,
 } from "../features/route-planning/application/usecases";
 import { crearHttpGateway } from "../features/route-planning/infrastructure/httpGateway";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Badge } from "../components/ui/badge";
 import { MapView, seleccionarAreaVisible, toMapViewModel, type LimitesMapa } from "../features/route-planning/components/map-view";
+import { desgloseScore } from "../features/route-planning/domain/explain";
 import { ControlesRecorrido } from "../features/route-planning/components/playback";
 import { LeyendaPrioridades } from "../features/route-planning/components/priority-legend";
 import { ResumenRecorrido } from "../features/route-planning/components/route-summary";
 import type {
+  ContainerPoint,
   Priority,
   PriorityForSegment,
   RouteCost,
   RouteStep,
   Scenario,
+  SegmentExplanation,
   ZoneType,
 } from "../features/route-planning/domain/types";
 
@@ -66,10 +71,12 @@ export default function PlanificadorDemo() {
   const [prioridadesEditadas, setPrioridadesEditadas] = useState<Record<string, Priority>>({});
   const [include, setInclude] = useState<Priority[]>(["high", "medium"]);
   const [startNodeId, setStartNodeId] = useState("");
+  const [fijarInicio, setFijarInicio] = useState(false);
   const [limites, setLimites] = useState<LimitesMapa | null>(null);
   const revisionArea = useRef(0);
   const [revisionVisible, setRevisionVisible] = useState(0);
   const [pagina, setPagina] = useState(0);
+  const [busquedaTramo, setBusquedaTramo] = useState("");
   const [steps, setSteps] = useState<RouteStep[]>([]);
   const [inicioRuta, setInicioRuta] = useState("");
   const [revisionRuta, setRevisionRuta] = useState<number | null>(null);
@@ -80,7 +87,12 @@ export default function PlanificadorDemo() {
   const [planning, setPlanning] = useState(false);
   const [message, setMessage] = useState("Cargando el escenario y consultando el árbol…");
   const [tramoSeleccionadoId, setTramoSeleccionadoId] = useState<string | null>(null);
+  const [explicacion, setExplicacion] = useState<SegmentExplanation | null>(null);
+  const [explicacionNota, setExplicacionNota] = useState<string | null>(null);
   const [soloTramosVisibles, setSoloTramosVisibles] = useState(true);
+  const [mostrarContenedores, setMostrarContenedores] = useState(false);
+  const [contenedores, setContenedores] = useState<ContainerPoint[]>([]);
+  const [contenedoresTotal, setContenedoresTotal] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -184,6 +196,14 @@ export default function PlanificadorDemo() {
     if (soloTramosVisibles && areaVisible) return areaVisible.tramos;
     return scenario.segments;
   }, [scenario, soloTramosVisibles, areaVisible]);
+  // Sin efecto: si el área se achica y la página deja de existir, se acota al renderizar.
+  const tramosFiltrados = useMemo(() => {
+    const q = busquedaTramo.trim().toLowerCase();
+    if (!q) return tramosTabla;
+    return tramosTabla.filter((t) => t.segmentId.toLowerCase().includes(q));
+  }, [busquedaTramo, tramosTabla]);
+  const totalPaginas = Math.max(1, Math.ceil(tramosFiltrados.length / TRAMOS_POR_PAGINA));
+  const paginaVisible = Math.min(pagina, totalPaginas - 1);
 
   const tramoSeleccionado = useMemo(
     () => (scenario && tramoSeleccionadoId
@@ -193,8 +213,42 @@ export default function PlanificadorDemo() {
   );
 
   useEffect(() => {
-    setPagina(0);
-  }, [soloTramosVisibles, areaVisible?.tramos.length]);
+    if (!tramoSeleccionado) return;
+    let active = true;
+    void solicitarExplicacion(gateway, new RequestStore(), "arbol", tramoSeleccionado).then(
+      (resultado) => {
+        if (!active) return;
+        if (resultado.estado === "exito") {
+          setExplicacion(resultado.datos);
+          setExplicacionNota(null);
+        } else if (resultado.estado === "error") {
+          setExplicacion(null);
+          setExplicacionNota("Camino del árbol no disponible para este tramo.");
+        } else {
+          setExplicacion(null);
+          setExplicacionNota(null);
+        }
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [gateway, tramoSeleccionado]);
+
+  useEffect(() => {
+    if (!mostrarContenedores || !limites) return;
+    let active = true;
+    void solicitarContenedores(gateway, new RequestStore(), limites, 2000).then((resultado) => {
+      if (!active) return;
+      if (resultado.estado === "exito") {
+        setContenedores(resultado.datos.points);
+        setContenedoresTotal(resultado.datos.total);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [gateway, mostrarContenedores, limites]);
 
   useEffect(() => {
     if (!reproduciendo || steps.length === 0 || pasoActual >= steps.length - 1) return;
@@ -209,6 +263,15 @@ export default function PlanificadorDemo() {
     setRevisionRuta(null);
     setPasoActual(-1);
     setReproduciendo(false);
+  }
+
+  function fijarInicioEn(nodo: { nodeId: string; lat: number; lon: number }) {
+    setStartNodeId(nodo.nodeId);
+    setFijarInicio(false);
+    resetRouteView();
+    setMessage(
+      `Inicio fijado en ${nodo.nodeId}: el circuito empieza y termina acá. Tocá "Solicitar circuito" para recalcular.`,
+    );
   }
 
   function togglePriority(priority: Priority) {
@@ -247,7 +310,7 @@ export default function PlanificadorDemo() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
+    <main className="mx-auto flex w-full max-w-[1400px] flex-1 flex-col gap-6 px-4 py-8 sm:px-6 sm:py-10">
       <header className="max-w-3xl">
         <p className="text-sm font-medium uppercase tracking-wide text-emerald-700">
           Demo de planificación
@@ -267,6 +330,8 @@ export default function PlanificadorDemo() {
 
       {scenario && (
         <>
+        <div className="grid items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+          <div className="flex min-w-0 flex-col gap-6">
           <section
             aria-labelledby="route-title"
             className="rounded-xl border border-zinc-200 bg-white p-5 sm:p-6"
@@ -326,6 +391,22 @@ export default function PlanificadorDemo() {
                 ))}
               </select>
             </label>
+            <div className="mt-3 flex max-w-sm flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setFijarInicio((v) => !v)}
+                disabled={loading || planning || !areaVisible || areaVisible.tramos.length === 0}
+                aria-pressed={fijarInicio}
+                className={`rounded-md border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${fijarInicio ? "border-emerald-700 bg-emerald-50 text-emerald-800" : "border-zinc-300 bg-white text-zinc-700"}`}
+              >
+                {fijarInicio ? "Clic en el mapa para fijar… (tocá para cancelar)" : "Fijar inicio con clic en el mapa"}
+              </button>
+            </div>
+            {fijarInicio && (
+              <p className="mt-2 text-sm text-emerald-700">
+                Tocá cualquier punto del mapa: se usa el nodo más cercano como inicio del circuito.
+              </p>
+            )}
             <button
               type="button"
               onClick={plan}
@@ -334,8 +415,12 @@ export default function PlanificadorDemo() {
             >
               {planning ? "Solicitando circuito…" : "Solicitar circuito"}
             </button>
+            <div className="mt-5 border-t border-zinc-100 pt-4">
+              <LeyendaPrioridades />
+            </div>
           </section>
-
+          </div>
+          <div className="flex min-w-0 flex-col gap-6">
           {mapModel && (
             <section
               aria-labelledby="map-title"
@@ -368,6 +453,10 @@ export default function PlanificadorDemo() {
                   <MapView
                     modelo={mapModel}
                     tramoSeleccionadoId={tramoSeleccionadoId}
+                    contenedores={contenedores}
+                    mostrarContenedores={mostrarContenedores}
+                    fijarInicioActivo={fijarInicio}
+                    onFijarInicio={fijarInicioEn}
                     onSeleccionarTramo={(segmentId) => {
                       setTramoSeleccionadoId(segmentId);
                       setMessage(
@@ -383,6 +472,19 @@ export default function PlanificadorDemo() {
                 <p className="mt-2 text-xs text-zinc-500">
                   Mapa: © OpenStreetMap contributors. Clic en un tramo para seleccionarlo.
                 </p>
+                <label className="mt-2 inline-flex items-center gap-2 text-sm text-zinc-700">
+                  <input
+                    type="checkbox"
+                    checked={mostrarContenedores}
+                    onChange={(event) => setMostrarContenedores(event.target.checked)}
+                  />
+                  Mostrar contenedores del área visible
+                  {mostrarContenedores && contenedoresTotal > 0 && (
+                    <span className="text-xs text-zinc-500">
+                      ({contenedores.length} dibujados de {contenedoresTotal} en vista)
+                    </span>
+                  )}
+                </label>
                 {tramoSeleccionado && (
                   <div
                     className="mt-4 rounded-lg border border-violet-200 bg-violet-50 p-4"
@@ -393,10 +495,56 @@ export default function PlanificadorDemo() {
                       Tramo seleccionado: {tramoSeleccionado.segmentId}
                     </h3>
                     <p className="mt-1 text-sm text-violet-900/80">
-                      {ZONA_ES[tramoSeleccionado.zoneType]} · {tramoSeleccionado.containerCount} contenedores.
+                      {ZONA_ES[tramoSeleccionado.zoneType]} · {tramoSeleccionado.containerCount} contenedores ·{" "}
+                      {tramoSeleccionado.daysSinceLastCollection} días sin recolección ·{" "}
+                      {tramoSeleccionado.historicNeighborComplaints} quejas.
                       Cambiar la prioridad simula otro resultado de planificación; no genera una
                       predicción nueva del árbol.
                     </p>
+                    {(() => {
+                      const d = desgloseScore(tramoSeleccionado);
+                      const predicha = priorityBySegment.get(tramoSeleccionado.segmentId);
+                      return (
+                        <div className="mt-3 rounded-md border border-violet-200 bg-white p-3 text-sm text-violet-950">
+                          <p className="font-semibold">¿Por qué esta prioridad?</p>
+                          <p className="mt-1 text-xs text-violet-900/80">
+                            score = 2·días + contenedores + zona_w + 2·quejas = {d.diasPonderado} +{" "}
+                            {d.contenedoresPonderado} + {d.zonaW} + {d.quejasPonderado} ={" "}
+                            <strong>{d.score}</strong> →{" "}
+                            {d.prioridadRegla === "high" ? "alta (score > 2)" : d.prioridadRegla === "medium" ? "media (score 1–2)" : "baja (score ≤ 0)"}
+                          </p>
+                          {predicha && predicha !== d.prioridadRegla && (
+                            <p className="mt-1 text-xs text-amber-700">
+                              La regla da {d.prioridadRegla === "high" ? "alta" : d.prioridadRegla === "medium" ? "media" : "baja"} pero
+                              el árbol predijo {predicha === "high" ? "alta" : predicha === "medium" ? "media" : "baja"} (o la
+                              ajustaste a mano).
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+                    {explicacion && explicacion.segmentId === tramoSeleccionadoId && explicacion.path.length > 0 && (
+                      <div className="mt-3 rounded-md border border-violet-200 bg-white p-3 text-sm text-violet-950">
+                        <p className="font-semibold">Camino del árbol</p>
+                        <ol className="mt-1 list-decimal space-y-1 pl-5 text-xs text-violet-900/80">
+                          {explicacion.path.map((paso) => (
+                            <li key={paso.node}>
+                              {paso.leaf ? (
+                                <>hoja → prioridad {explicacion.priority === "high" ? "alta" : explicacion.priority === "medium" ? "media" : "baja"}</>
+                              ) : (
+                                <>
+                                  {paso.feature}: {paso.value !== undefined ? paso.value.toFixed(2) : "?"} {paso.direction}
+                                  {" "}(umbral {paso.threshold !== undefined ? paso.threshold.toFixed(2) : "?"})
+                                </>
+                              )}
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                    {explicacionNota && explicacion?.segmentId !== tramoSeleccionadoId && (
+                      <p className="mt-2 text-xs text-violet-900/60">{explicacionNota}</p>
+                    )}
                     <label className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-violet-950">
                       Prioridad para el próximo circuito
                       <select
@@ -427,9 +575,6 @@ export default function PlanificadorDemo() {
                     </button>
                   </div>
                 )}
-                <div className="mt-4">
-                  <LeyendaPrioridades />
-                </div>
                 {steps.length > 0 && (
                   <div className="mt-4">
                     <ControlesRecorrido
@@ -489,23 +634,44 @@ export default function PlanificadorDemo() {
             </section>
           )}
 
-          <section
-            aria-labelledby="scenario-title"
-            className="rounded-xl border border-zinc-200 bg-white p-5 sm:p-6"
-          >
-            <h2 id="scenario-title" className="text-xl font-semibold text-zinc-900">
-              4. Tramos del escenario
-            </h2>
+          </div>
+        </div>
+          <details className="rounded-xl border border-zinc-200 bg-white p-5 sm:p-6">
+            <summary className="cursor-pointer text-xl font-semibold text-zinc-900">
+              4. Tramos del escenario (datos)
+            </summary>
             <p className="mt-1 text-sm text-zinc-600">
               {scenario.segments.length} tramos · {scenario.nodes.length} nodos · prioridad del
               árbol por tramo (editable para comparar el circuito). Preferí elegir el tramo en el
               mapa o filtrar a los visibles.
             </p>
+            <label className="mt-3 flex max-w-sm flex-col gap-2 text-sm text-zinc-700">
+              Buscar tramo por ID
+              <input
+                type="search"
+                value={busquedaTramo}
+                onChange={(event) => {
+                  setBusquedaTramo(event.target.value);
+                  setPagina(0);
+                }}
+                placeholder="p. ej. T0123"
+                aria-label="Buscar tramo por ID"
+                className="rounded-md border border-zinc-300 bg-white px-3 py-2"
+              />
+            </label>
+            {busquedaTramo.trim() !== "" && (
+              <p className="mt-2 text-sm text-zinc-600" role="status">
+                {tramosFiltrados.length} tramos coinciden con “{busquedaTramo.trim()}”.
+              </p>
+            )}
             <label className="mt-3 inline-flex items-center gap-2 text-sm text-zinc-700">
               <input
                 type="checkbox"
                 checked={soloTramosVisibles}
-                onChange={(event) => setSoloTramosVisibles(event.target.checked)}
+                onChange={(event) => {
+                  setSoloTramosVisibles(event.target.checked);
+                  setPagina(0);
+                }}
               />
               Solo tramos del área visible
               {areaVisible ? ` (${areaVisible.tramos.length})` : ""}
@@ -521,7 +687,7 @@ export default function PlanificadorDemo() {
                   </tr>
                 </thead>
                 <tbody>
-                  {tramosTabla.slice(pagina * TRAMOS_POR_PAGINA, (pagina + 1) * TRAMOS_POR_PAGINA).map((segment) => {
+                  {tramosFiltrados.slice(paginaVisible * TRAMOS_POR_PAGINA, (paginaVisible + 1) * TRAMOS_POR_PAGINA).map((segment) => {
                     const prioridad = priorityBySegment.get(segment.segmentId);
                     const enRuta = cost?.mandatory?.includes(segment.segmentId);
                     const esTransito = cost?.transit?.includes(segment.segmentId);
@@ -581,14 +747,14 @@ export default function PlanificadorDemo() {
                 </tbody>
               </table>
             </div>
-            {tramosTabla.length > TRAMOS_POR_PAGINA && (
+            {tramosFiltrados.length > TRAMOS_POR_PAGINA && (
               <div className="mt-3 flex items-center gap-3 text-sm">
-                <button type="button" disabled={pagina === 0} onClick={() => setPagina((p) => p - 1)}>Anterior</button>
-                <span>Página {pagina + 1} de {Math.ceil(tramosTabla.length / TRAMOS_POR_PAGINA)}</span>
-                <button type="button" disabled={(pagina + 1) * TRAMOS_POR_PAGINA >= tramosTabla.length} onClick={() => setPagina((p) => p + 1)}>Siguiente</button>
+                <button type="button" disabled={paginaVisible === 0} onClick={() => setPagina((p) => Math.max(0, p - 1))}>Anterior</button>
+                <span>Página {paginaVisible + 1} de {totalPaginas}</span>
+                <button type="button" disabled={paginaVisible + 1 >= totalPaginas} onClick={() => setPagina((p) => Math.min(totalPaginas - 1, p + 1))}>Siguiente</button>
               </div>
             )}
-          </section>
+          </details>
         </>
       )}
     </main>

@@ -72,6 +72,30 @@ Response (one result per input segment, in input order):
 The endpoint consumes the already-fitted `arbol` model. It does not accept
 `training_rows` or train a model. Other model identifiers are unsupported.
 
+### `POST /predictions:explain`
+
+Explains one prediction: the synthetic #18 score breakdown plus the fitted
+decision-tree path traversed for that segment. Only the `arbol` model is
+explainable; other estimators return `EXPLAIN_UNSUPPORTED`.
+
+Request: `{"model_id":"arbol","segment":{...}}` (same segment shape as
+`predict`, single object).
+
+Response:
+
+```json
+{"segment_id":"T0001","priority":"high",
+ "score":{"days_weighted":0,"containers_weighted":3,"zone_w":0,"complaints_weighted":0,"total":3},
+ "path":[{"node":0,"feature":"remainder__cantidad_contenedores","threshold":1.5,"value":3.0,"direction":"derecha (>)"},{"node":2,"leaf":true}]}
+```
+
+### `GET /containers?sur=&norte=&oeste=&este=&limit=`
+
+Returns levante container coordinates inside the requested WGS84 bbox, capped
+at `limit` (default 2000). Invalid bbox or negative limit is `INVALID_REQUEST`.
+
+Response: `{"points":[{"lon":-56.16,"lat":-34.91,"days":2}],"total":1,"truncated":false}`.
+
 ### `POST /routes:plan`
 
 Request:
@@ -123,6 +147,7 @@ Error bodies use `{"detail":{"code":"...","detail":"..."}}`.
 | 422 | `IMPOSSIBLE_ROUTE` | Empty destination selection or disconnected complete graph |
 | 422 | `PREDICTION_WITHOUT_SEGMENT` | Predictor output cannot be matched 1:1 to input |
 | 422 | `MODEL_UNKNOWN` | Unsupported model identifier |
+| 422 | `EXPLAIN_UNSUPPORTED` | Predictor cannot explain (only the decision tree is explainable) |
 | 503 | `MODEL_UNAVAILABLE` | Fitted model artifact is unavailable |
 | 503 | `SCENARIO_UNAVAILABLE` | Scenario data or its geometries are missing or inconsistent |
 

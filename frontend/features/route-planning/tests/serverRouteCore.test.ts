@@ -26,6 +26,13 @@ function gateway(scenario = escenario): ApiGateway {
     health: vi.fn(),
     getScenario: vi.fn().mockResolvedValue(scenario),
     predictPriorities: vi.fn().mockResolvedValue([{ segmentId: "inside", priority: "high" }]),
+    listContainers: vi.fn().mockResolvedValue({ points: [], total: 0, truncated: false }),
+    explainPriority: vi.fn().mockResolvedValue({
+      segmentId: "inside",
+      priority: "high",
+      score: { daysWeighted: 2, containersWeighted: 1, zoneW: 0, complaintsWeighted: 0, total: 3 },
+      path: [{ node: 0, leaf: true }],
+    }),
     planRoute: vi.fn().mockResolvedValue({
       steps: [{ order: 0, segmentId: "inside", repeated: false }, { order: 1, segmentId: "inside", repeated: true }],
       cost: { totalCostM: 200, unit: "meters", coverage: 1 },

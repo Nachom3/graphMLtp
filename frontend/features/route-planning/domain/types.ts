@@ -101,6 +101,21 @@ export interface PlanInput {
   include: Priority[];
 }
 
+/** Punto de contenedor de levante (backend: GET /containers). */
+export interface ContainerPoint {
+  lon: number;
+  lat: number;
+  days?: number;
+}
+
+/** Ventana geográfica WGS84 para pedir solo lo visible. */
+export interface VentanaMapa {
+  sur: number;
+  norte: number;
+  oeste: number;
+  este: number;
+}
+
 /** Fila de entrenamiento etiquetada (backend: training rows). */
 export interface TrainingRow {
   zoneType: ZoneType;
@@ -108,6 +123,30 @@ export interface TrainingRow {
   daysSinceLastCollection: number;
   historicNeighborComplaints: number;
   priority: Priority;
+}
+
+/** Paso del camino de decisión del árbol (backend: predictions:explain). */
+export interface TreePathStep {
+  node: number;
+  leaf?: boolean;
+  feature?: string;
+  threshold?: number;
+  value?: number;
+  direction?: string;
+}
+
+/** Explicación de una predicción: score de la regla + camino del árbol. */
+export interface SegmentExplanation {
+  segmentId: SegmentId;
+  priority: Priority;
+  score: {
+    daysWeighted: number;
+    containersWeighted: number;
+    zoneW: number;
+    complaintsWeighted: number;
+    total: number;
+  };
+  path: TreePathStep[];
 }
 
 export type ErrorCode =
