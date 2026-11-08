@@ -1,16 +1,17 @@
-import type { ApiGateway } from "../application/usecases";
+import type { ApiGateway, RoutePlanInput } from "../application/usecases";
 import type {
   ModelId,
   OperationError,
   Priority,
   PriorityForSegment,
-  PlanInput,
   RouteCost,
   RouteStep,
+  Scenario,
   Segment,
   SegmentId,
 } from "../domain/types";
 import { conRepeticiones } from "../domain/types";
+import { demoScenario } from "./demoScenario";
 
 export interface FakeOptions {
   latencyMs?: number;
@@ -54,6 +55,11 @@ export class FakeGateway implements ApiGateway {
     return { status: "ok", version: "v1", schema: "v1" };
   }
 
+  async getScenario(signal?: AbortSignal): Promise<Scenario> {
+    await this.step(signal);
+    return demoScenario;
+  }
+
   async predictPriorities(
     modelId: ModelId,
     segments: Segment[],
@@ -74,7 +80,7 @@ export class FakeGateway implements ApiGateway {
   }
 
   async planRoute(
-    input: PlanInput,
+    input: RoutePlanInput,
     signal?: AbortSignal,
   ): Promise<{ steps: RouteStep[]; cost: RouteCost }> {
     await this.step(signal);

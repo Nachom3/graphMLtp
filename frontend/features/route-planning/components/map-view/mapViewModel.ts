@@ -7,6 +7,9 @@ export interface TramoVisible {
   prioridad: Priority | "unknown";
   patron: string;
   esPasoActual: boolean;
+  esDestino: boolean;
+  esTransito: boolean;
+  ordenes: number[]; // orden devuelto por el backend, incluidas repeticiones
   repeticiones: number; // cuántas veces aparece en el recorrido
 }
 
@@ -29,11 +32,19 @@ export function toMapViewModel(args: {
   nodos: Map<string, { lat: number; lon: number }>;
   prioridades: PriorityForSegment[];
   pasos: RouteStep[];
+  mandatory?: string[];
+  transit?: string[];
   pasoActual?: number;
 }): MapViewModel {
   const pri = new Map(args.prioridades.map((p) => [p.segmentId, p.priority]));
   const conteo = new Map<string, number>();
-  for (const p of args.pasos) conteo.set(p.segmentId, (conteo.get(p.segmentId) ?? 0) + 1);
+  const ordenes = new Map<string, number[]>();
+  for (const p of args.pasos) {
+    conteo.set(p.segmentId, (conteo.get(p.segmentId) ?? 0) + 1);
+    ordenes.set(p.segmentId, [...(ordenes.get(p.segmentId) ?? []), p.order]);
+  }
+  const mandatory = new Set(args.mandatory ?? []);
+  const transit = new Set(args.transit ?? []);
 
   const tramos: TramoVisible[] = args.tramos.map((t) => {
     const prioridad = pri.get(t.segmentId) ?? "unknown";
@@ -54,6 +65,9 @@ export function toMapViewModel(args: {
       prioridad,
       patron: PATRON[prioridad],
       esPasoActual: actual,
+      esDestino: mandatory.has(t.segmentId),
+      esTransito: transit.has(t.segmentId),
+      ordenes: ordenes.get(t.segmentId) ?? [],
       repeticiones,
     };
   });

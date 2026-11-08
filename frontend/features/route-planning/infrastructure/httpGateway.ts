@@ -1,4 +1,5 @@
-import type { ApiGateway } from "../application/usecases";
+import type { ApiGateway, RoutePlanInput } from "../application/usecases";
+import { demoScenario } from "./demoScenario";
 import type {
   ErrorCode,
   ModelComparison,
@@ -6,14 +7,26 @@ import type {
   Node,
   OperationError,
   PriorityForSegment,
-  PlanInput,
   RouteCost,
   RouteStep,
   Segment,
-  TrainingRow,
 } from "../domain/types";
 
-/** Formas del backend (nombres del dominio Python; rutas provisorias). */
+/** DTOs del contrato HTTP en inglés; se traducen en este adaptador. */
+interface ScenarioDTO {
+  nodes: { node_id: string; lon: number; lat: number }[];
+  segments: {
+    segment_id: string;
+    origin_node: string;
+    destination_node: string;
+    length_m: number;
+    zone_type: Segment["zoneType"];
+    container_count: number;
+    days_since_last_collection: number;
+    historic_neighbor_complaints: number;
+  }[];
+}
+
 interface PredictDTO {
   model_id: string;
   predictions: { segment_id: string; priority: "low" | "medium" | "high" }[];
@@ -24,6 +37,10 @@ interface PlanDTO {
   repetitions: string[];
   total_cost_m: number;
   unit: string;
+  mandatory: string[];
+  transit: string[];
+  repeated_distance_m: number;
+  coverage: number;
 }
 
 /** Mapea códigos del backend a códigos estables de presentación. */
@@ -72,6 +89,24 @@ async function read<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
 }
 
+function scenarioFromDTO(dto: ScenarioDTO) {
+  return {
+    scenarioId: "piloto-mvd",
+    version: "v1",
+    nodes: dto.nodes.map((n) => ({ nodeId: n.node_id, lon: n.lon, lat: n.lat })),
+    segments: dto.segments.map((s) => ({
+      segmentId: s.segment_id,
+      originNode: s.origin_node,
+      destinationNode: s.destination_node,
+      lengthM: s.length_m,
+      zoneType: s.zone_type,
+      containerCount: s.container_count,
+      daysSinceLastCollection: s.days_since_last_collection,
+      historicNeighborComplaints: s.historic_neighbor_complaints,
+    })),
+  };
+}
+
 function segmentRow(s: Segment) {
   return {
     segment_id: s.segmentId,
@@ -82,16 +117,6 @@ function segmentRow(s: Segment) {
     container_count: s.containerCount,
     days_since_last_collection: s.daysSinceLastCollection,
     historic_neighbor_complaints: s.historicNeighborComplaints,
-  };
-}
-
-function trainingRow(r: TrainingRow) {
-  return {
-    zone_type: r.zoneType,
-    container_count: r.containerCount,
-    days_since_last_collection: r.daysSinceLastCollection,
-    historic_neighbor_complaints: r.historicNeighborComplaints,
-    priority: r.priority,
   };
 }
 
@@ -130,19 +155,23 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
     health(signal?: AbortSignal) {
       return get<{ status: string; version: string; schema: string }>("/health", signal);
     },
+    async getScenario(signal?: AbortSignal) {
+      try {
+        return scenarioFromDTO(await get<ScenarioDTO>("/scenario", signal));
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") throw error;
+        return demoScenario;
+      }
+    },
     async predictPriorities(
       modelId: ModelId,
       segments: Segment[],
       signal?: AbortSignal,
-      trainingRows: TrainingRow[] = [],
     ): Promise<PriorityForSegment[]> {
       const dto = await post<PredictDTO>(
         "/predictions:predict",
         {
           model_id: modelId,
-          // El backend la exige para `arbol`/`logistica` (422 sin ella);
-          // `rule-v1` la ignora y acepta `[]`.
-          training_rows: trainingRows.map(trainingRow),
           segments: segments.map(segmentRow),
         },
         signal,
@@ -151,7 +180,7 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
       return dto.predictions.map((p) => ({ segmentId: p.segment_id, priority: p.priority }));
     },
     async planRoute(
-      input: PlanInput,
+      input: RoutePlanInput,
       signal?: AbortSignal,
     ): Promise<{ steps: RouteStep[]; cost: RouteCost }> {
       const dto = await post<PlanDTO>(
@@ -161,18 +190,28 @@ export function crearHttpGateway(baseUrl: string): ApiGateway {
           segments: input.segments.map(segmentRow),
           priorities: input.priorities,
           include: input.include,
+          start_node_id: input.startNodeId,
         },
         signal,
       );
-      // Se conserva orden y repeticiones tal cual; el costo es opaco.
-      const repeated = new Set(dto.repetitions);
+      // Conserva el orden y la lista de ids repetidos declarados por el backend.
+      const repeatedIds = new Set(dto.repetitions);
+      const seen = new Set<string>();
+      const steps = dto.order.map((segmentId, order) => {
+        const repeated = repeatedIds.has(segmentId) && seen.has(segmentId);
+        seen.add(segmentId);
+        return { order, segmentId, repeated };
+      });
       return {
-        steps: dto.order.map((segmentId, order) => ({
-          order,
-          segmentId,
-          repeated: repeated.has(segmentId),
-        })),
-        cost: { totalCostM: dto.total_cost_m, unit: dto.unit },
+        steps,
+        cost: {
+          totalCostM: dto.total_cost_m,
+          unit: dto.unit,
+          mandatory: dto.mandatory,
+          transit: dto.transit,
+          repeatedDistanceM: dto.repeated_distance_m,
+          coverage: dto.coverage,
+        },
       };
     },
   };

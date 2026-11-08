@@ -9,7 +9,7 @@ import {
   verificarSalud,
 } from "../application/usecases";
 import { FakeGateway } from "../infrastructure/fakeGateway";
-import type { OperationError, PlanInput } from "../domain/types";
+import type { OperationError } from "../domain/types";
 import {
   comparisonFixture,
   costFixture,
@@ -17,7 +17,6 @@ import {
   planInputFixture,
   prioritiesFixture,
   scenarioFixture,
-  trainingRowsFixture,
 } from "./fixtures";
 
 function gw(failure: OperationError | null = null, latencyMs = 0, forcedOrder?: string[]) {
@@ -74,8 +73,6 @@ describe("prioridades y recorrido con gateway fake (semántica del backend)", ()
       new RequestStore(),
       "arbol",
       [scenarioFixture.segments[0], scenarioFixture.segments[1]],
-      undefined,
-      trainingRowsFixture,
     );
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
@@ -98,7 +95,7 @@ describe("prioridades y recorrido con gateway fake (semántica del backend)", ()
   it("selección vacía → estado vacío, sin llamar al backend", async () => {
     const resP = await solicitarPrioridades(gw(), new RequestStore(), "arbol", []);
     expect(resP.estado).toBe("vacio");
-    const vacio: PlanInput = { ...planInputFixture, segments: [] };
+    const vacio = { ...planInputFixture, startNodeId: "N0001", segments: [] };
     const resR = await solicitarRecorrido(gw(), new RequestStore(), vacio);
     expect(resR.estado).toBe("vacio");
   });
@@ -113,7 +110,7 @@ describe("prioridades y recorrido con gateway fake (semántica del backend)", ()
 
   it("recorrido imposible (falla del backend) → error tipado", async () => {
     const malo = gw({ code: "impossible-route" });
-    const res = await solicitarRecorrido(malo, new RequestStore(), planInputFixture);
+    const res = await solicitarRecorrido(malo, new RequestStore(), { ...planInputFixture, startNodeId: "N0001" });
     expect(res.estado).toBe("error");
     if (res.estado !== "error") return;
     expect(res.error.code).toBe("impossible-route");
@@ -121,7 +118,7 @@ describe("prioridades y recorrido con gateway fake (semántica del backend)", ()
 
   it("recorrido con tramo repetido conserva ambas ocurrencias y su orden; costo opaco sin recalcular", async () => {
     const orden = gw(null, 0, repeatedRouteIds);
-    const res = await solicitarRecorrido(orden, new RequestStore(), planInputFixture);
+    const res = await solicitarRecorrido(orden, new RequestStore(), { ...planInputFixture, startNodeId: "N0001" });
     expect(res.estado).toBe("exito");
     if (res.estado !== "exito") return;
     expect(res.datos.steps.map((p) => p.segmentId)).toEqual(repeatedRouteIds);

@@ -9,7 +9,6 @@ import type {
   RouteStep,
   Scenario,
   Segment,
-  TrainingRow,
 } from "../domain/types";
 import { conRepeticiones } from "../domain/types";
 
@@ -17,16 +16,18 @@ import { conRepeticiones } from "../domain/types";
  * Puerto pequeño sustituible (DIP/ISP), alineado con el backend.
  * La app depende de esto; HTTP y fake lo implementan. Sin fetch disperso.
  */
+export type RoutePlanInput = PlanInput & { startNodeId: string };
+
 export interface ApiGateway {
   health(signal?: AbortSignal): Promise<{ status: string; version: string; schema: string }>;
+  getScenario(signal?: AbortSignal): Promise<Scenario>;
   predictPriorities(
     modelId: ModelId,
     segments: Segment[],
     signal?: AbortSignal,
-    trainingRows?: TrainingRow[],
   ): Promise<PriorityForSegment[]>;
   planRoute(
-    input: PlanInput,
+    input: RoutePlanInput,
     signal?: AbortSignal,
   ): Promise<{ steps: RouteStep[]; cost: RouteCost }>;
 }
@@ -131,13 +132,24 @@ export function consultarComparacion(
   return { estado: "exito", requestId, datos };
 }
 
+export async function obtenerEscenario(
+  gw: ApiGateway,
+  store: RequestStore,
+  signal?: AbortSignal,
+): Promise<OperationState<Scenario>> {
+  const result = await ejecutar(store, gw.getScenario(signal), (scenario) =>
+    scenario.segments.length === 0 ? "escenario sin tramos" : null,
+  );
+  if (result.estado !== "exito") return result;
+  return cargarEscenario(store, result.datos);
+}
+
 export function solicitarPrioridades(
   gw: ApiGateway,
   store: RequestStore,
   modelId: ModelId,
   segments: Segment[],
   signal?: AbortSignal,
-  trainingRows: TrainingRow[] = [],
 ): Promise<OperationState<PriorityForSegment[]>> {
   if (segments.length === 0) {
     return Promise.resolve({
@@ -145,7 +157,7 @@ export function solicitarPrioridades(
       motivo: "selección vacía",
     } as OperationState<PriorityForSegment[]>);
   }
-  return ejecutar(store, gw.predictPriorities(modelId, segments, signal, trainingRows), (ps) =>
+  return ejecutar(store, gw.predictPriorities(modelId, segments, signal), (ps) =>
     ps.length === 0 ? "sin prioridades" : null,
   );
 }
@@ -153,7 +165,7 @@ export function solicitarPrioridades(
 export function solicitarRecorrido(
   gw: ApiGateway,
   store: RequestStore,
-  input: PlanInput,
+  input: RoutePlanInput,
   signal?: AbortSignal,
 ): Promise<OperationState<{ steps: RouteStep[]; cost: RouteCost }>> {
   if (input.segments.length === 0) {

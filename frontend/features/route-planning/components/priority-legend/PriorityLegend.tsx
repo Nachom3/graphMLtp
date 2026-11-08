@@ -9,7 +9,11 @@ export function LeyendaPrioridades() {
   return (
     <div>
       <h2>Leyenda de prioridades</h2>
-      <ul>{items}</ul>
+      <ul>
+        {items}
+        <li>Destino obligatorio — prioridad alta/media/baja</li>
+        <li>Conexión de tránsito — gris discontinua; no es una recolección</li>
+      </ul>
     </div>
   );
 }
