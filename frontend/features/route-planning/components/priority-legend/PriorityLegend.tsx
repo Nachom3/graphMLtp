@@ -4,7 +4,7 @@ import type { Priority } from "../../domain/types";
 import { LEYENDA_PRIORIDAD } from "./leyenda";
 
 /** Color usado en el mapa para cada prioridad (ver MapViewCliente). */
-const COLOR: Record<Priority | "transito" | "repetido" | "actual" | "seleccion", string> = {
+const COLOR: Record<Priority | "transito" | "repetido" | "actual" | "seleccion" | "contenedor", string> = {
   high: "#dc2626",
   medium: "#d97706",
   low: "#2563eb",
@@ -12,6 +12,7 @@ const COLOR: Record<Priority | "transito" | "repetido" | "actual" | "seleccion",
   repetido: "#0f766e",
   actual: "#047857",
   seleccion: "#7c3aed",
+  contenedor: "#0ea5e9",
 };
 
 function MuestraLinea({
@@ -43,20 +44,31 @@ function MuestraLinea({
   );
 }
 
+function MuestraPunto({ color }: { color: string }) {
+  return (
+    <span
+      className="inline-block h-3 w-3 shrink-0 rounded-full"
+      style={{ backgroundColor: color }}
+      aria-hidden
+    />
+  );
+}
+
 /**
- * Leyenda en dos capas: (1) color = prioridad del tramo;
- * (2) marcas encima = rol en el recorrido. La repetición no es otra calle.
+ * Leyenda en capas: (1) color = prioridad; (2) rol en recorrido; (3) contenedores.
+ * En el mapa usá el selector de modos para no mezclar todo a la vez.
  */
 export function LeyendaPrioridades() {
   const items = Object.keys(LEYENDA_PRIORIDAD) as Priority[];
   return (
-    <div className="mt-4 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+    <div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
         Cómo leer el mapa
       </h2>
       <p className="mt-2 text-sm text-zinc-600">
-        Una misma calle puede verse con varias marcas: el color es la prioridad; el contorno
-        verde agua indica que el camión la recorre más de una vez (no es una calle extra).
+        Cambiá el modo arriba del mapa (Prioridad / Recorrido / Contenedores) para mirar una cosa a
+        la vez. El color del tramo es la prioridad; el contorno verde agua es la misma calle
+        recorrida más de una vez.
       </p>
 
       <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -65,13 +77,7 @@ export function LeyendaPrioridades() {
       <ul className="mt-2 grid gap-2 text-sm text-zinc-700 sm:grid-cols-3">
         {items.map((prioridad) => (
           <li key={prioridad} className="flex items-center gap-2">
-            <MuestraLinea
-              color={COLOR[prioridad]}
-              estilo={
-                prioridad === "medium" ? "dashed" : prioridad === "low" ? "dotted" : "solid"
-              }
-              grueso={prioridad === "high" ? 5 : 3}
-            />
+            <MuestraLinea color={COLOR[prioridad]} grueso={prioridad === "high" ? 5 : 3} />
             <Badge
               className={cn(
                 "border-transparent text-xs font-medium text-white",
@@ -116,6 +122,24 @@ export function LeyendaPrioridades() {
             <strong className="font-medium">Seleccionado</strong> — clic en el mapa para editar
             prioridad
           </span>
+        </li>
+      </ul>
+
+      <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        3. Contenedores
+      </h3>
+      <ul className="mt-2 grid gap-2 text-sm text-zinc-700 sm:grid-cols-3">
+        <li className="flex items-center gap-2">
+          <MuestraPunto color="#38bdf8" />
+          <span>≤2 días sin recolección</span>
+        </li>
+        <li className="flex items-center gap-2">
+          <MuestraPunto color="#f59e0b" />
+          <span>3–5 días</span>
+        </li>
+        <li className="flex items-center gap-2">
+          <MuestraPunto color="#dc2626" />
+          <span>≥6 días (urgente)</span>
         </li>
       </ul>
     </div>

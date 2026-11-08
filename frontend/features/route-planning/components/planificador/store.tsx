@@ -9,6 +9,7 @@ import {
   solicitarContenedores,
   solicitarExplicacion,
   solicitarPrioridades,
+  solicitarRecorrido,
   type ApiGateway,
 } from "../../application/usecases";
 import { seleccionarAreaVisible, toMapViewModel, type LimitesMapa, type MapViewModel } from "../map-view";
@@ -24,12 +25,14 @@ import type {
   SegmentExplanation,
 } from "../../domain/types";
 import {
+  BARRIO_DEFAULT,
   errorText,
   MAX_TRAMOS_CALCULO,
   MAX_TRAMOS_PREDICCION,
   PRIORITIES,
   TRAMOS_POR_PAGINA,
   UMBRAL_PREDICCION_GLOBAL,
+  type ModoMapa,
 } from "./constantes";
 
 /**
@@ -61,6 +64,7 @@ export interface ValorPlanificador {
   mostrarContenedores: boolean;
   contenedores: ContainerPoint[];
   contenedoresTotal: number;
+  modoMapa: ModoMapa;
   priorityBySegment: Map<string, Priority>;
   areaVisible: { nodos: Node[]; tramos: Segment[] } | null;
   iniciosDisponibles: Node[];
@@ -88,6 +92,7 @@ export interface ValorPlanificador {
   alternarVisibles: (valor: boolean) => void;
   irAPagina: (pagina: number) => void;
   alternarContenedores: (valor: boolean) => void;
+  elegirModoMapa: (modo: ModoMapa) => void;
   reiniciarRecorrido: () => void;
   pasoAnterior: () => void;
   reproducirPausar: () => void;
@@ -111,7 +116,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
   const [include, setInclude] = useState<Priority[]>(["high", "medium"]);
   const [startNodeId, setStartNodeId] = useState("");
   const [fijarInicio, setFijarInicio] = useState(false);
-  const [limites, setLimites] = useState<LimitesMapa | null>(null);
+  const [limites, setLimites] = useState<LimitesMapa | null>(BARRIO_DEFAULT);
   const revisionArea = useRef(0);
   const [revisionVisible, setRevisionVisible] = useState(0);
   const [pagina, setPagina] = useState(0);
@@ -129,9 +134,10 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
   const [explicacion, setExplicacion] = useState<SegmentExplanation | null>(null);
   const [explicacionNota, setExplicacionNota] = useState<string | null>(null);
   const [soloTramosVisibles, setSoloTramosVisibles] = useState(true);
-  const [mostrarContenedores, setMostrarContenedores] = useState(false);
+  const [mostrarContenedores, setMostrarContenedores] = useState(true);
   const [contenedores, setContenedores] = useState<ContainerPoint[]>([]);
   const [contenedoresTotal, setContenedoresTotal] = useState(0);
+  const [modoMapa, setModoMapa] = useState<ModoMapa>("prioridad");
 
   useEffect(() => {
     let active = true;
@@ -291,7 +297,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
       if (resultado.estado === "exito") {
         setPriorities(resultado.datos);
         setMessage(
-          `Prioridades del área calculadas por el árbol (${resultado.datos.length} tramos). Elegí prioridades, inicio y solicitá el circuito.`,
+          `Prioridades del área calculadas por el árbol (${resultado.datos.length} tramos). Revisá el mapa y tocá Simular circuito en esta zona.`,
         );
       } else if (resultado.estado === "error") {
         setMessage(`No se pudieron predecir las prioridades del área: ${errorText(resultado.error)} Movete o acercá para reintentar.`);
@@ -330,14 +336,16 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     setRevisionRuta(null);
     setPasoActual(-1);
     setReproduciendo(false);
+    setModoMapa("prioridad");
   }
 
   function fijarInicioEn(nodo: { nodeId: string; lat: number; lon: number }) {
     setStartNodeId(nodo.nodeId);
     setFijarInicio(false);
     resetRouteView();
+    setModoMapa("prioridad");
     setMessage(
-      `Inicio fijado en ${nodo.nodeId}: el circuito empieza y termina acá. Tocá "Solicitar circuito" para recalcular.`,
+      `Inicio fijado en ${nodo.nodeId}: el circuito empieza y termina acá. Tocá "Simular circuito en esta zona" para recalcular.`,
     );
   }
 
@@ -361,19 +369,46 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
 
   function plan() {
     if (!scenario || !areaVisible || !limites || !inicioVisible || include.length === 0 || areaVisible.tramos.length > MAX_TRAMOS_CALCULO) return;
+    if (priorities.length === 0) return;
     setPlanning(true);
-    const params = new URLSearchParams({
-      sur: String(limites.sur), norte: String(limites.norte),
-      oeste: String(limites.oeste), este: String(limites.este),
-      include: include.join(","), start: inicioVisible,
-    });
-    for (const tramo of areaVisible.tramos) {
-      const prioridad = prioridadesEditadas[tramo.segmentId];
-      if (prioridad) params.append("override", `${tramo.segmentId}:${prioridad}`);
+    setMessage("Calculando el circuito en esta zona…");
+    const prioritiesMap: Record<string, Priority> = {};
+    for (const row of priorities) prioritiesMap[row.segmentId] = row.priority;
+    for (const [id, priority] of Object.entries(prioridadesEditadas)) {
+      if (areaVisible.tramos.some((t) => t.segmentId === id)) prioritiesMap[id] = priority;
     }
-    // Navegación completa: el servidor genera el HTML del recorrido solicitado.
-    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    window.location.assign(`/recorrido?${params.toString()}`);
+    void solicitarRecorrido(gateway, new RequestStore(), {
+      nodes: areaVisible.nodos,
+      segments: areaVisible.tramos,
+      priorities: prioritiesMap,
+      include,
+      startNodeId: inicioVisible,
+    }).then((resultado) => {
+      setPlanning(false);
+      if (resultado.estado === "exito") {
+        setSteps(resultado.datos.steps);
+        setCost(resultado.datos.cost);
+        setInicioRuta(inicioVisible);
+        setRevisionRuta(revisionArea.current);
+        setPasoActual(-1);
+        setReproduciendo(false);
+        setModoMapa("recorrido");
+        const obligatorias = resultado.datos.cost.mandatory?.length ?? 0;
+        const transito = resultado.datos.cost.transit?.length ?? 0;
+        const km = (resultado.datos.cost.totalCostM / 1000).toLocaleString("es", { maximumFractionDigits: 1 });
+        setMessage(
+          `Circuito listo en el mapa: ${resultado.datos.steps.length} pasos · ${obligatorias} calles a recolectar · ${transito} de paso · ~${km} km.`,
+        );
+        return;
+      }
+      if (resultado.estado === "error") {
+        setMessage(errorText(resultado.error));
+        return;
+      }
+      if (resultado.estado === "vacio") {
+        setMessage(resultado.motivo);
+      }
+    });
   }
 
   const puedePlanificar = !(loading || planning || priorities.length === 0 || include.length === 0 || !inicioVisible || !areaVisible || areaVisible.tramos.length > MAX_TRAMOS_CALCULO);
@@ -426,6 +461,11 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     setMostrarContenedores(valor);
   }
 
+  function elegirModoMapa(modo: ModoMapa) {
+    setModoMapa(modo);
+    if (modo === "contenedores") setMostrarContenedores(true);
+  }
+
   function reiniciarRecorrido() {
     setReproduciendo(false);
     setPasoActual(-1);
@@ -467,6 +507,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     pasoActual, reproduciendo, loading, planning, message,
     tramoSeleccionadoId, explicacion, explicacionNota,
     soloTramosVisibles, mostrarContenedores, contenedores, contenedoresTotal,
+    modoMapa,
     priorityBySegment, areaVisible, iniciosDisponibles, inicioVisible,
     mapModel, tramosFiltrados, totalPaginas, paginaVisible,
     tramoSeleccionado, puedePlanificar, puedeFijar, areaTramos,
@@ -474,7 +515,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     togglePriority, overridePriority, plan, elegirInicio,
     alternarFijarInicio, fijarInicioEn, seleccionarTramo, quitarSeleccion,
     actualizarLimites, buscarTramo, alternarVisibles, irAPagina,
-    alternarContenedores, reiniciarRecorrido, pasoAnterior,
+    alternarContenedores, elegirModoMapa, reiniciarRecorrido, pasoAnterior,
     reproducirPausar, pasoSiguiente, saltarAPaso, elegirPaso,
   };
   return <ContextoPlanificador.Provider value={valor}>{children}</ContextoPlanificador.Provider>;

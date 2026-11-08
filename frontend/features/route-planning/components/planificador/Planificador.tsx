@@ -15,6 +15,29 @@ import { SeccionMapa } from "./SeccionMapa";
 import { TablaTramos } from "./TablaTramos";
 import { PlanificadorProvider, usePlanificador } from "./store";
 
+function TiritaPasos() {
+  return (
+    <ol className="mt-4 flex flex-wrap gap-2 text-sm" aria-label="Pasos de la demo">
+      {[
+        { n: "1", t: "Mirar prioridades" },
+        { n: "2", t: "Simular circuito" },
+        { n: "3", t: "Ver pasos en el mapa" },
+      ].map((paso, i) => (
+        <li
+          key={paso.n}
+          className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-emerald-900"
+        >
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-700 text-xs font-bold text-white">
+            {paso.n}
+          </span>
+          {paso.t}
+          {i < 2 && <span className="sr-only">luego</span>}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function Contenido() {
   const v = usePlanificador();
   return (
@@ -27,9 +50,10 @@ function Contenido() {
           Planificá un circuito de recolección
         </h1>
         <p className="mt-3 text-zinc-600">
-          El árbol colorea cada tramo por prioridad. La API arma el circuito; acá lo ves paso a
-          paso, con los tramos que se recorren más de una vez marcados en el mapa.
+          El árbol colorea cada tramo por prioridad. Simulá el circuito en esta zona y miralo paso a
+          paso en el mismo mapa, con contenedores e inicio marcados.
         </p>
+        <TiritaPasos />
       </header>
 
       <Alert role="status" aria-live="polite" className="border-zinc-200">

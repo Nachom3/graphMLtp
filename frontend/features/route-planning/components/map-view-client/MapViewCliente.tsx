@@ -8,7 +8,7 @@ import type {
   Polyline,
 } from "leaflet";
 import type { LimitesMapa, MapViewModel, TramoVisible } from "../map-view/mapViewModel";
-import { estilo, etiquetaTramo } from "./mapStyles";
+import { estilo, etiquetaTramo, mostrarHaloRepeticion, mostrarVehiculo, type ModoMapa } from "./mapStyles";
 import { actualizarVehiculo, dibujarContenedores } from "./overlays";
 import type { PuntoContenedor } from "./overlays";
 
@@ -20,8 +20,18 @@ export type { PuntoContenedor };
  * recrear el mapa (la animación del vehículo no parpadea).
  * Recibe solo el view-model puro, nunca entidades del backend.
  */
-/** Punto de contenedor de levante para la capa opcional del mapa. */
-export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, onSeleccionarTramo, contenedores, mostrarContenedores, fijarInicioActivo, onFijarInicio }: {
+export function MapViewCliente({
+  modelo,
+  onLimitesChange,
+  tramoSeleccionadoId,
+  onSeleccionarTramo,
+  contenedores,
+  mostrarContenedores,
+  fijarInicioActivo,
+  onFijarInicio,
+  modoMapa = "prioridad",
+  encuadreInicial,
+}: {
   modelo: MapViewModel;
   onLimitesChange?: (limites: LimitesMapa) => void;
   tramoSeleccionadoId?: string | null;
@@ -30,6 +40,8 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
   mostrarContenedores?: boolean;
   fijarInicioActivo?: boolean;
   onFijarInicio?: (nodo: { nodeId: string; lat: number; lon: number }) => void;
+  modoMapa?: ModoMapa;
+  encuadreInicial?: LimitesMapa | null;
 }) {
   const refDiv = useRef<HTMLDivElement | null>(null);
   const refL = useRef<typeof import("leaflet") | null>(null);
@@ -44,6 +56,7 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
   const refEncuadreInicial = useRef(false);
   const refDatos = useRef<Map<string, TramoVisible>>(new Map());
   const refHayRecorrido = useRef(false);
+  const refModo = useRef<ModoMapa>(modoMapa);
   const refModelo = useRef(modelo);
   const refLimitesChange = useRef(onLimitesChange);
   const refSeleccionado = useRef(tramoSeleccionadoId);
@@ -51,6 +64,7 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
   const refSeleccionCapas = useRef<Map<string, Polyline>>(new Map());
   const refContenedores = useRef<LayerGroup | null>(null);
   const refFijarInicio = useRef({ fijarInicioActivo, onFijarInicio });
+  const refEncuadre = useRef(encuadreInicial);
 
   useEffect(() => {
     refModelo.current = modelo;
@@ -58,17 +72,30 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
     refSeleccionado.current = tramoSeleccionadoId;
     refOnSeleccionar.current = onSeleccionarTramo;
     refFijarInicio.current = { fijarInicioActivo, onFijarInicio };
+    refModo.current = modoMapa;
+    refEncuadre.current = encuadreInicial;
   });
+
+  function emitirLimites(mapa: MapaLeaflet) {
+    const bounds = mapa.getBounds();
+    refLimitesChange.current?.({
+      sur: bounds.getSouth(),
+      norte: bounds.getNorth(),
+      oeste: bounds.getWest(),
+      este: bounds.getEast(),
+    });
+  }
 
   function dibujar(m: MapViewModel) {
     const L = refL.current;
     const mapa = refMapa.current;
     const capas = refCapas.current;
     if (!L || !mapa || !capas) return;
+    const modo = refModo.current;
 
     const clave = `${m.tramos.map((t) => t.segmentId).join(",")}|${m.nodos
       .map((n) => n.nodeId)
-      .join(",")}|${m.centro.join(",")}`;
+      .join(",")}|${m.centro.join(",")}|${modo}`;
 
     if (clave !== refAjuste.current) {
       capas.clearLayers();
@@ -81,10 +108,9 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
         refNodos.current = L.layerGroup().addTo(mapa);
       }
 
-      // Contornos de repetición debajo; tramos encima.
       for (const t of m.tramos) {
         if (t.puntos.length === 0) continue;
-        if (t.esRepetido) {
+        if (mostrarHaloRepeticion(modo, t)) {
           const contorno = L.polyline(t.puntos, {
             color: "#0f766e",
             weight: 12,
@@ -107,11 +133,10 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
           marca.addTo(capas);
           refSeleccionCapas.current.set(t.segmentId, marca);
         }
-        const linea = L.polyline(t.puntos, estilo(t, m.hayRecorrido, seleccionado)).bindTooltip(
+        const linea = L.polyline(t.puntos, estilo(t, m.hayRecorrido, seleccionado, modo)).bindTooltip(
           etiquetaTramo(t),
         );
         linea.on("click", (evento) => {
-          // Evita que el mapa interprete el clic como pan/zoom incidental.
           L.DomEvent.stopPropagation(evento);
           refOnSeleccionar.current?.(t.segmentId);
         });
@@ -121,24 +146,31 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
 
       for (const n of m.nodos.filter((n) => n.esInicio)) {
         const icono: DivIcon = L.divIcon({
-          className: n.esInicio ? "marcador-nodo marcador-nodo-inicio" : "marcador-nodo",
+          className: "marcador-nodo marcador-nodo-inicio",
           html: `<span>INICIO ${n.nodeId.replace(/^N0*/, "N")}</span>`,
-          iconSize: [84, 32],
-          iconAnchor: [42, 16],
+          iconSize: [96, 36],
+          iconAnchor: [48, 18],
         });
         L.marker([n.lat, n.lon], {
           icon: icono,
           keyboard: false,
+          zIndexOffset: 800,
           title: `INICIO ${n.nodeId}: el circuito empieza y termina acá`,
-        }).addTo(refNodos.current);
+        }).addTo(refNodos.current!);
       }
 
-      // La lista de tramos cambia al mover el mapa por el culling de viewport.
-      // Encuadrar solo una vez evita deshacer cada zoom o desplazamiento.
-      if (!refEncuadreInicial.current && (m.tramos.length > 0 || m.nodos.length > 1000)) {
-        if (m.nodos.length > 1000 || m.tramos.length > 1000) {
+      if (!refEncuadreInicial.current) {
+        const barrio = refEncuadre.current;
+        if (barrio) {
+          const box = L.latLngBounds(
+            [barrio.sur, barrio.oeste],
+            [barrio.norte, barrio.este],
+          );
+          // fitBounds dispara moveend → onLimitesChange (Leaflet real).
+          mapa.fitBounds(box, { padding: [24, 24], maxZoom: 16 });
+        } else if (m.nodos.length > 1000 || m.tramos.length > 1000) {
           mapa.setView([-34.905, -56.16], 13);
-        } else {
+        } else if (m.tramos.length > 0) {
           const limites = L.latLngBounds([]);
           for (const tramo of m.tramos) {
             for (const punto of tramo.puntos) limites.extend(punto);
@@ -153,11 +185,7 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
         const anterior = refDatos.current.get(t.segmentId);
         const linea = refLineas.current.get(t.segmentId);
         const seleccionado = refSeleccionado.current === t.segmentId;
-        const cambioEstilo = !anterior || refHayRecorrido.current !== m.hayRecorrido ||
-          anterior.prioridad !== t.prioridad || anterior.esPasoActual !== t.esPasoActual ||
-          anterior.esDestino !== t.esDestino || anterior.esTransito !== t.esTransito ||
-          anterior.enRecorrido !== t.enRecorrido || anterior.esRepetido !== t.esRepetido;
-        linea?.setStyle(estilo(t, m.hayRecorrido, seleccionado));
+        linea?.setStyle(estilo(t, m.hayRecorrido, seleccionado, modo));
         let marca = refSeleccionCapas.current.get(t.segmentId);
         if (seleccionado && !marca && t.puntos.length > 0) {
           marca = L.polyline(t.puntos, {
@@ -180,7 +208,7 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
           linea?.setTooltipContent(etiquetaTramo(t));
         }
         const contorno = refContornos.current.get(t.segmentId);
-        if (t.esRepetido && !contorno && t.puntos.length > 0) {
+        if (mostrarHaloRepeticion(modo, t) && !contorno && t.puntos.length > 0) {
           const nuevo = L.polyline(t.puntos, {
             color: "#0f766e",
             weight: 12,
@@ -192,27 +220,32 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
           nuevo.bringToBack();
           refContornos.current.set(t.segmentId, nuevo);
         }
-        if (contorno && cambioEstilo) {
+        if (contorno) {
           contorno.setStyle({
-            opacity: t.esRepetido ? (t.esPasoActual ? 0.55 : 0.35) : 0,
+            opacity: mostrarHaloRepeticion(modo, t) ? (t.esPasoActual ? 0.55 : 0.35) : 0,
           });
         }
       }
-      // Un solo marcador evita miles de elementos DOM y sigue al inicio elegido.
       refNodos.current?.clearLayers();
       const inicio = m.nodos.find((n) => n.esInicio);
       if (inicio && refNodos.current) {
         const icono = L.divIcon({
           className: "marcador-nodo marcador-nodo-inicio",
           html: `<span>INICIO ${inicio.nodeId.replace(/^N0*/, "N")}</span>`,
-          iconSize: [84, 32], iconAnchor: [42, 16],
+          iconSize: [96, 36],
+          iconAnchor: [48, 18],
         });
-        L.marker([inicio.lat, inicio.lon], { icon: icono, keyboard: false, title: `INICIO ${inicio.nodeId}: el circuito empieza y termina acá` }).addTo(refNodos.current);
+        L.marker([inicio.lat, inicio.lon], {
+          icon: icono,
+          keyboard: false,
+          zIndexOffset: 800,
+          title: `INICIO ${inicio.nodeId}: el circuito empieza y termina acá`,
+        }).addTo(refNodos.current);
       }
     }
     refDatos.current = new Map(m.tramos.map((t) => [t.segmentId, t]));
     refHayRecorrido.current = m.hayRecorrido;
-    actualizarVehiculo(L, mapa, m, refVehiculo, refFlecha);
+    actualizarVehiculo(L, mapa, m, refVehiculo, refFlecha, mostrarVehiculo(modo));
   }
 
   useEffect(() => {
@@ -223,13 +256,13 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
       const L = await import("leaflet");
       if (cancelado || !refDiv.current || refMapa.current) return;
       refL.current = L;
-      mapa = L.map(refDiv.current, { preferCanvas: true }).setView(refModelo.current.centro, 15);
+      const barrio = refEncuadre.current;
+      const centroInicial: [number, number] = barrio
+        ? [(barrio.sur + barrio.norte) / 2, (barrio.oeste + barrio.este) / 2]
+        : refModelo.current.centro;
+      mapa = L.map(refDiv.current, { preferCanvas: true }).setView(centroInicial, 15);
       mapa.on("moveend", () => {
-        const bounds = mapa?.getBounds();
-        if (bounds) refLimitesChange.current?.({
-          sur: bounds.getSouth(), norte: bounds.getNorth(),
-          oeste: bounds.getWest(), este: bounds.getEast(),
-        });
+        if (mapa) emitirLimites(mapa);
       });
       mapa.on("click", (evento: { latlng: { lat: number; lng: number } }) => {
         const { fijarInicioActivo, onFijarInicio } = refFijarInicio.current;
@@ -280,14 +313,21 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
 
   useEffect(() => {
     dibujar(modelo);
-  }, [modelo, tramoSeleccionadoId]);
+  }, [modelo, tramoSeleccionadoId, modoMapa]);
 
   useEffect(() => {
     const L = refL.current;
     const mapa = refMapa.current;
     if (!L || !mapa) return;
-    refContenedores.current = dibujarContenedores(L, mapa, refContenedores.current, contenedores, mostrarContenedores);
-  }, [contenedores, mostrarContenedores, modelo]);
+    refContenedores.current = dibujarContenedores(
+      L,
+      mapa,
+      refContenedores.current,
+      contenedores,
+      mostrarContenedores,
+      modoMapa === "contenedores",
+    );
+  }, [contenedores, mostrarContenedores, modelo, modoMapa]);
 
   return (
     <div

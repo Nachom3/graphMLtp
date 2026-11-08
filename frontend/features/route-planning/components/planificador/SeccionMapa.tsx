@@ -5,8 +5,17 @@
  */
 import { MapView } from "../map-view";
 import { ControlesRecorrido } from "../playback";
+import { BARRIO_DEFAULT, type ModoMapa } from "./constantes";
+import { CartelitoCriollo } from "./CartelitoCriollo";
 import { DetalleTramo } from "./DetalleTramo";
+import { MiniLeyenda } from "./MiniLeyenda";
 import { usePlanificador } from "./store";
+
+const MODOS: { value: ModoMapa; label: string }[] = [
+  { value: "prioridad", label: "Prioridad" },
+  { value: "recorrido", label: "Recorrido" },
+  { value: "contenedores", label: "Contenedores" },
+];
 
 export function SeccionMapa() {
   const v = usePlanificador();
@@ -40,19 +49,45 @@ export function SeccionMapa() {
         )}
       </div>
       <div className="p-4 sm:p-6">
-        <div className="overflow-hidden rounded-lg border border-zinc-200">
+        <div
+          className="mb-3 inline-flex rounded-lg border border-zinc-200 bg-zinc-50 p-1"
+          role="group"
+          aria-label="Modo de visualización del mapa"
+        >
+          {MODOS.map((modo) => (
+            <button
+              key={modo.value}
+              type="button"
+              onClick={() => v.elegirModoMapa(modo.value)}
+              aria-pressed={v.modoMapa === modo.value}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                v.modoMapa === modo.value
+                  ? "bg-white text-zinc-900 shadow-sm"
+                  : "text-zinc-600 hover:text-zinc-900"
+              }`}
+            >
+              {modo.label}
+            </button>
+          ))}
+        </div>
+        <div className="relative overflow-hidden rounded-lg border border-zinc-200">
           <MapView
             modelo={mapModel}
             tramoSeleccionadoId={v.tramoSeleccionadoId}
             contenedores={v.contenedores}
             mostrarContenedores={v.mostrarContenedores}
+            modoMapa={v.modoMapa}
+            encuadreInicial={BARRIO_DEFAULT}
             fijarInicioActivo={v.fijarInicio}
             onFijarInicio={v.fijarInicioEn}
             onSeleccionarTramo={v.seleccionarTramo}
-            onLimitesChange={v.actualizarLimites} />
+            onLimitesChange={v.actualizarLimites}
+          />
+          <MiniLeyenda modo={v.modoMapa} />
         </div>
         <p className="mt-2 text-xs text-zinc-500">
-          Mapa: © OpenStreetMap contributors. Clic en un tramo para seleccionarlo.
+          Mapa: © OpenStreetMap contributors. Clic en un tramo para ver por qué tiene esa prioridad.
+          El marcador INICIO es donde empieza y termina el circuito.
         </p>
         <label className="mt-2 inline-flex items-center gap-2 text-sm text-zinc-700">
           <input
@@ -63,10 +98,16 @@ export function SeccionMapa() {
           Mostrar contenedores del área visible
           {v.mostrarContenedores && v.contenedoresTotal > 0 && (
             <span className="text-xs text-zinc-500">
-              ({v.contenedores.length} dibujados de {v.contenedoresTotal} en vista)
+              ({v.contenedores.length} dibujados de {v.contenedoresTotal} en vista
+              {v.contenedores.length < v.contenedoresTotal ? "; vista truncada" : ""})
             </span>
           )}
         </label>
+        {v.cost && v.steps.length > 0 && (
+          <div className="mt-4">
+            <CartelitoCriollo steps={v.steps} cost={v.cost} />
+          </div>
+        )}
         {v.tramoSeleccionado && (
           <DetalleTramo
             tramo={v.tramoSeleccionado}

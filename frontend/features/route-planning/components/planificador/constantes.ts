@@ -4,6 +4,7 @@
  * Etiquetas visibles en español; prioridades y zonas en inglés del backend.
  */
 import type { Priority, ZoneType } from "../../domain/types";
+import type { LimitesMapa } from "../map-view/mapViewModel";
 
 export const PRIORITIES: { value: Priority; label: string }[] = [
   { value: "high", label: "Alta" },
@@ -18,6 +19,20 @@ export const TRAMOS_POR_PAGINA = 100;
 export const UMBRAL_PREDICCION_GLOBAL = 2500;
 /** Montevideo: se predice solo el área visible, por vista. */
 export const MAX_TRAMOS_PREDICCION = 2000;
+
+/**
+ * Barrio demo al entrar (Cordón Sur / Parque Rodó): lo bastante chico para
+ * predecir y simular sin que el usuario tenga que ampliar el mapa a mano.
+ */
+export const BARRIO_DEFAULT: LimitesMapa = {
+  sur: -34.912,
+  norte: -34.900,
+  oeste: -56.172,
+  este: -56.152,
+};
+
+/** Capas visuales del mapa: un encoding por modo. */
+export type { ModoMapa } from "../map-view-client/mapStyles";
 
 export const ZONA_ES: Record<ZoneType, string> = {
   residential: "Residencial",

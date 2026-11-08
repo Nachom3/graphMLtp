@@ -3,6 +3,7 @@
  *
  * Presentacional: recibe valores y callbacks, no conoce el gateway.
  */
+import { useState } from "react";
 import { LeyendaPrioridades } from "../priority-legend";
 import type { Node, Priority } from "../../domain/types";
 import { MAX_TRAMOS_CALCULO, PRIORITIES } from "./constantes";
@@ -40,6 +41,23 @@ export function PanelFiltros({
   puedePlanificar,
   onPlan,
 }: PanelFiltrosProps) {
+  const [leyendaAbierta, setLeyendaAbierta] = useState(false);
+  const motivoBloqueo = !puedePlanificar
+    ? deshabilitado
+      ? planEnCurso
+        ? "Calculando…"
+        : "Esperá a que cargue el escenario."
+      : sinPrioridades
+        ? "Faltan prioridades del área: esperá o acercá el mapa."
+        : include.length === 0
+          ? "Elegí al menos una prioridad a incluir."
+          : !inicioVisible
+            ? "No hay nodo de inicio en el área visible."
+            : areaTramos !== null && areaTramos > MAX_TRAMOS_CALCULO
+              ? `Acercá el mapa: hay ${areaTramos} tramos (máx. ${MAX_TRAMOS_CALCULO}).`
+              : "Ajustá el área o las prioridades para poder simular."
+    : null;
+
   return (
     <section
       aria-labelledby="route-title"
@@ -49,20 +67,15 @@ export function PanelFiltros({
         1. Prioridades a recorrer y nodo de inicio
       </h2>
       <p className="mt-1 text-sm text-zinc-600">
-        Cambiá la selección y volvé a pedir el circuito: el recorrido se adapta a las
-        predicciones incluidas.
+        El mapa ya arranca en un barrio chico. Elegí qué prioridades incluir y tocá simular: el
+        circuito se dibuja en el mismo mapa.
       </p>
       <p className="mt-2 text-sm text-zinc-700">
-        El cálculo usa solo tramos que intersectan el área visible. Cada tramo se incluye
-        completo y puede extenderse fuera de la vista; los demás no se usan. El recorte
-        puede desconectar el grafo. Acercá o mové el mapa para elegir el área.
-      </p>
-      <p className="mt-1 text-sm text-zinc-700">
         {areaTramos !== null
           ? `${areaTramos} tramos visibles. ` +
             (areaTramos > MAX_TRAMOS_CALCULO
               ? `Acercá el mapa: el máximo para calcular es ${MAX_TRAMOS_CALCULO}.`
-              : `Límite de cálculo: ${MAX_TRAMOS_CALCULO} tramos.`)
+              : `Listo para simular (límite ${MAX_TRAMOS_CALCULO}).`)
           : "Esperando el área visible del mapa."}
       </p>
       <fieldset className="mt-4">
@@ -82,7 +95,7 @@ export function PanelFiltros({
         </div>
       </fieldset>
       <label className="mt-5 flex max-w-sm flex-col gap-2 text-sm font-medium">
-        Nodo de inicio del área seleccionada
+        Nodo de inicio (el circuito empieza y termina acá)
         <select
           aria-label="Selector de nodo de inicio"
           value={inicioVisible}
@@ -119,10 +132,25 @@ export function PanelFiltros({
         disabled={!puedePlanificar}
         className="mt-5 rounded-md bg-emerald-700 px-4 py-2 font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {planEnCurso ? "Solicitando circuito…" : "Solicitar circuito"}
+        {planEnCurso ? "Simulando circuito…" : "Simular circuito en esta zona"}
       </button>
+      {motivoBloqueo && (
+        <p className="mt-2 text-xs text-amber-800">{motivoBloqueo}</p>
+      )}
       <div className="mt-5 border-t border-zinc-100 pt-4">
-        <LeyendaPrioridades />
+        <button
+          type="button"
+          className="text-sm font-medium text-zinc-700 underline"
+          aria-expanded={leyendaAbierta}
+          onClick={() => setLeyendaAbierta((v) => !v)}
+        >
+          {leyendaAbierta ? "Ocultar leyenda completa" : "Cómo leer el mapa (leyenda)"}
+        </button>
+        {leyendaAbierta && (
+          <div className="mt-3">
+            <LeyendaPrioridades />
+          </div>
+        )}
       </div>
     </section>
   );

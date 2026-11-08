@@ -22,6 +22,14 @@ export interface PuntoContenedor {
 type Leaflet = typeof import("leaflet");
 type MarcadorRef = { current: Marker | null };
 
+/** Color del marcador según días sin recolección. */
+export function colorContenedor(days: number | undefined): string {
+  if (days === undefined) return "#0ea5e9";
+  if (days <= 2) return "#38bdf8";
+  if (days <= 5) return "#f59e0b";
+  return "#dc2626";
+}
+
 /** Un solo marcador de vehículo que sigue el paso actual (sin parpadeo). */
 export function actualizarVehiculo(
   L: Leaflet,
@@ -29,7 +37,15 @@ export function actualizarVehiculo(
   m: MapViewModel,
   refVehiculo: MarcadorRef,
   refFlecha: MarcadorRef,
+  activo = true,
 ): void {
+  if (!activo) {
+    refVehiculo.current?.remove();
+    refVehiculo.current = null;
+    refFlecha.current?.remove();
+    refFlecha.current = null;
+    return;
+  }
   const actual = m.tramos.find((t) => t.esPasoActual);
   const puntos = actual?.puntosOrientados ?? actual?.puntos;
   if (!actual || !puntos || puntos.length < 2) {
@@ -87,17 +103,21 @@ export function dibujarContenedores(
   capaActual: LayerGroup | null,
   contenedores: PuntoContenedor[] | undefined,
   mostrarContenedores: boolean | undefined,
+  enfatizar = false,
 ): LayerGroup | null {
   capaActual?.remove();
   if (!mostrarContenedores || !contenedores || contenedores.length === 0) return null;
   const grupo = L.layerGroup();
+  const radio = enfatizar ? 6 : 5;
   for (const p of contenedores.slice(0, 2000)) {
+    const color = colorContenedor(p.days);
     L.circleMarker([p.lat, p.lon], {
-      radius: 3,
-      color: "#0ea5e9",
+      radius: radio,
+      color,
       weight: 1,
-      opacity: 0.9,
-      fillOpacity: 0.7,
+      opacity: 0.95,
+      fillColor: color,
+      fillOpacity: enfatizar ? 0.85 : 0.7,
       interactive: true,
     })
       .bindTooltip(
