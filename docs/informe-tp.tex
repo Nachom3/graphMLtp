@@ -1,0 +1,221 @@
+% TP Machine Learning + Grafos — Informe
+% Proyecto: Recolección Montevideo (297 tramos piloto)
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{blue},
+  commentstyle=\color{gray},
+  stringstyle=\color{red},
+  breaklines=true,
+  frame=single,
+  language=Python,
+  showstringspaces=false,
+  tabsize=2
+}
+
+\title{Recolección de residuos en Montevideo:\\ clasificación de prioridad con ML y planificación de recorridos con grafos}
+\author{TP Machine Learning + Grafos}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Se construyó un dataset mixto de 297 tramos (red vial OSM real-derivada + contenedores reales + variables operativas sintéticas) con etiqueta sintética determinista. Se compararon los 4 clasificadores del curso con protocolo sin fuga (split 178/59/60 seed 0, CV5 solo en train, GridSearchCV, elección en validación, test de un solo uso). Árbol y SVM empataron en 1.0; se eligió el árbol por interpretabilidad, simplicidad operativa y mejor representación de la regla. El 1.0 mide ajuste a la regla, no desempeño operativo. El árbol además aprendió implícitamente el invariante de dominio \texttt{cont==0 $\Rightarrow$ dias==0}. Los tramos prioritarios alimentan un planificador NetworkX (rural + cartero chino ponderado) que devuelve un circuito cerrado con costo en metros.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%----------------------------------------------------------------
+\section{Tecnologías y punto de partida}
+
+\subsection{Decisión tecnológica}
+\begin{itemize}
+\item \textbf{Dataset y ML (Python):} \texttt{pandas==3.1.1}, \texttt{numpy==2.5.4}, \texttt{scikit-learn==1.9.1}, \texttt{matplotlib==3.10.8} para figuras. Semilla fija 0 en todo el pipeline.
+\item \textbf{Grafos y geo:} \texttt{networkx==3.7}, \texttt{shapely==2.2.0}, \texttt{pyproj==3.8.0}. La red se modela como \texttt{MultiGraph} no dirigido con peso \texttt{length\_m} geodésico.
+\item \textbf{Backend:} \texttt{fastapi==0.162.0} + \texttt{uvicorn}, dominio en inglés con mapeo ES$\leftrightarrow$EN explícito, \texttt{joblib} para el artefacto del árbol, \texttt{pytest + nbval} con pre-push hook.
+\item \textbf{Frontend demo:} Next.js + Tailwind, consume API v1 real (\texttt{/datos}, \texttt{/prediccion}, \texttt{/recorridos}).
+\end{itemize}
+
+Fuente: \texttt{requirements.txt} (scripts) y \texttt{backend/requirements.txt}.
+
+\subsection{Problema entendido}
+No predecimos costo con regresión: el costo sale exacto del grafo (suma de \texttt{longitud\_m} + repeticiones del cartero chino). La tarea ML es \textbf{clasificación} de \texttt{prioridad\_recoleccion} $\in\{$baja, media, alta$\}$ por tramo en una foto T0. Cada fila es un tramo en T0; \texttt{dias\_*} mira hacia atrás, sin serie temporal. La etiqueta es construida y sintética (permitido por el enunciado, que aclara que es esperable que los modelos descubran la regla).
+
+Esquema real en \texttt{docs/dataset-recoleccion.md} y contratos en \texttt{docs/contracts/api-v1.md}; arquitectura en \texttt{docs/architecture/backend.md}.
+
+%----------------------------------------------------------------
+\section{Dataset y regla sintética}
+
+\subsection{Fuentes}
+\begin{itemize}
+\item Red vial: Geofabrik Uruguay OSM (80M, SHA-256 \texttt{37fd73...}).
+\item Contenedores: Figshare Montevideo Garbage Containers, 11\,556 coords (MD5 coincide).
+\item \texttt{dias\_desde\_ultima\_recoleccion}: real, de levantes (\texttt{daysWithoutLift}), foto T0.
+\item \texttt{tipo\_zona}: simulada 60/25/15 seed 42. \texttt{historico\_quejas\_vecinales}: sintético.
+\item Etiqueta: sintética, función determinista de X.
+\end{itemize}
+
+\subsection{Regla \#18 (la que aprende el modelo)}
+\begin{lstlisting}
+# backend/src/collection/adapters/datasets/synthetic_complaints.py
+DAYS_WEIGHT = 2; CONTAINERS_WEIGHT = 1
+ZONE_WEIGHTS = {"residencial": 0, "industrial": 1, "comercial": 2}
+COMPLAINT_WEIGHT = 2
+SCORE_LOW_MAX = 0; SCORE_MEDIUM_MAX = 2
+SCORE_FORMULA = "2*dias + 1*contenedores + 1*zona_w + 2*quejas"
+score = 2*dias + contenedores + zona_w + 2*quejas
+# baja si score<=0 | media si 1..2 | alta si >2
+\end{lstlisting}
+
+Cada contenedor representado recibe un sorteo uniforme $[0,3]$ (seed 0, estable por \texttt{tramo\_id}); la suma por tramo es \texttt{quejas}; si \texttt{cont==0} entonces \texttt{quejas==0}. Balance seed 0: \textbf{129 baja / 93 media / 75 alta} (43.4/31.3/25.3\%). La regla v1 sin quejas daba 129/125/43; las quejas mueven $\sim$12pp de media a alta.
+
+Distribución real que condiciona todo: \texttt{dias}$=\{0{:}275, 1{:}22\}$, \texttt{cont}$=\{0{:}210, 1{:}51, 2{:}30, 3{:}6\}$, quejas media 0.59 (75\% en cero). El peso 2x de días casi no se ejercita: es latente, no observado.
+
+Corroboración: \texttt{057de96} regla v1 recalibrada, \texttt{59d8da3} quejas sintéticas, \texttt{e722131} snap contenedores, \texttt{3205dbf} días desde levantes.
+
+\subsection{Invariante de dominio que el árbol aprendió solo}
+Verificado solo-lectura sobre el CSV:
+\begin{itemize}
+\item \texttt{cont==0 $\Rightarrow$ dias==0} en las \textbf{210/210} filas con \texttt{cont==0}.
+\item Las 22 filas con \texttt{dias==1} tienen todas \texttt{cont$\geq$1}.
+\end{itemize}
+Con \texttt{cont==0}, \texttt{quejas==0} forzado y \texttt{dias} ignorado, \texttt{score = zona\_w} $\rightarrow$ residencial $0\rightarrow$baja, industrial $1\rightarrow$media, comercial $2\rightarrow$media. \textbf{Es exactamente lo que aprendió el árbol en esa rama} (residencial$\rightarrow$baja, no-residencial$\rightarrow$media). El árbol entendió el dominio mejor que la fórmula: implementa gratis el invariante ``si no hay contenedor no hay pasada que contar''. Por eso no se toca código ni artefacto: cambiar la regla a \texttt{dias\_efectivo = dias if cont>0 else 0} deja 0/297 etiquetas iguales hoy, solo blinda futuro. Recomendación: una línea en doc (``\texttt{dias} es 0 por construcción cuando \texttt{cont} es 0'').
+
+%----------------------------------------------------------------
+\section{Evaluación de modelos: por qué árboles}
+
+\subsection{Protocolo (sin hacer trampa)}
+\begin{enumerate}
+\item \textbf{Separar antes de mirar:} 178 train / 59 validación / 60 test (60/20/20), estratificado, seed 0. Test bajo llave hasta el final.
+\item \textbf{Practicar dentro del train:} CV estratificada 5 folds solo en train (shuffle seed 0). Cada modelo reporta media$\pm$std.
+\item \textbf{Grid pequeña, siempre adentro:} \texttt{GridSearchCV} (scoring F1 macro, refit) con todo lo que aprende dentro del \texttt{Pipeline} (\texttt{StandardScaler} solo en numéricas para logística/kNN/SVC; árbol sin escala; \texttt{OneHotEncoder(handle\_unknown="ignore")}). Sin fuga.
+\item \textbf{Elegir en validación, confirmar en test:} ganadores de cada grilla se contrastan en validación; elección por F1 macro. Test una sola vez, solo para el elegido + baseline mayoría.
+\end{enumerate}
+
+\begin{lstlisting}
+# backend/src/collection/adapters/models/model_specs.py
+PARAM_GRIDS = {
+  "arbol": {"decisiontreeclassifier__max_depth": [None,3,5],
+            "decisiontreeclassifier__min_samples_split": [2,5]},
+  "logistica": {"logisticregression__C": [0.5,1.0,2.0]},
+  "knn": {"kneighborsclassifier__n_neighbors": [3,5,7]},
+  "svc": {"svc__C": [0.5,1.0]},  # RBF fijo
+}
+\end{lstlisting}
+
+Corroboración: \texttt{b64e37e} entrenar/comparar sobre \#18, \texttt{b9bbc09} fix \texttt{EvaluationProtocol.strafied}, \texttt{1325859} comparar los 4 y justificar árbol.
+
+\subsection{Resultados (seed 0, CSV 297)}
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Modelo & CV acc & CV F1 & Val acc & Val F1 \\
+\midrule
+árbol & 0.9944$\pm$0.0111 & \textbf{0.9932$\pm$0.0136} & \textbf{1.0000} & \textbf{1.0000} \\
+svc RBF & 0.9776$\pm$0.0324 & 0.9733$\pm$0.0390 & \textbf{1.0000} & \textbf{1.0000} \\
+kNN & 0.9775$\pm$0.0276 & 0.9743$\pm$0.0315 & 0.9661 & 0.9680 \\
+logística & 0.9660$\pm$0.0331 & 0.9619$\pm$0.0367 & 0.9322 & 0.9268 \\
+baseline & --- & --- & 0.4407 & 0.2039 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Mejor grilla: árbol \texttt{max\_depth=None, min\_samples\_split=2}; logística \texttt{C=0.5}; kNN \texttt{k=7}; SVC \texttt{C=1.0}.
+
+Validación (n=59, orden baja/media/alta):
+\begin{itemize}
+\item árbol: \texttt{[[26,0,0],[0,18,0],[0,0,15]]} — cero errores.
+\item svc: idéntica — empate perfecto.
+\item kNN: \texttt{[[26,0,0],[2,16,0],[0,0,15]]} — 2 medias reales $\rightarrow$ baja.
+\item logística: \texttt{[[26,0,0],[2,16,0],[0,2,13]]} — 2 medias$\rightarrow$baja + 2 altas$\rightarrow$media.
+\item Elegido: \textbf{árbol}. Test un solo uso: acc 1.0000, F1 1.0000, matriz \texttt{[[26,0,0],[0,19,0],[0,0,15]]}.
+\end{itemize}
+
+Figuras: \texttt{docs/figs/f1\_comparacion.png}, \texttt{matrices\_confusion\_validacion.png}, \texttt{arbol\_ganador.png} (regenerables con \texttt{train\_compare.py --figures}). Corroboración: \texttt{d52c062} figuras + sensibilidad.
+
+\subsection{Por qué el árbol aunque empató con SVM}
+\begin{enumerate}
+\item \textbf{Interpretabilidad (criterio del curso):} se grafica con \texttt{plot\_tree} y muestra feature + umbral por decisión; SVC-RBF es caja negra.
+\item \textbf{Simplicidad operativa:} no lleva \texttt{StandardScaler}; menos piezas que se rompen con zonas no vistas.
+\item \textbf{Costo:} inferencia O(profundidad) vs O(n\_soporte $\times$ features).
+\item \textbf{Coherencia con el dato:} la etiqueta es regla por umbrales sobre las mismas features; el árbol la representa directo, SVC la aproxima.
+\end{enumerate}
+
+Lectura honesta que va en la defensa: el árbol gana porque la etiqueta es determinista sobre X; logística se acerca pero confunde vecinas, kNN queda en el medio, SVC empata pero pierde en interpretación y costo. El 1.0 en test no prueba utilidad operativa.
+
+\subsection{Interpolación vs extrapolación (la grilla de 117)}
+En los datos reales (interpolación) gana el árbol. En combinaciones construidas a mano que no aparecen en el dataset (extrapolación / fuera de soporte), kNN/SVM se equivocan menos en conteo bruto.
+
+Pero no alcanza con contar errores: \textbf{importa el tipo}. Los errores de kNN son \texttt{media$\rightarrow$baja}: tramos que deberían recolectarse quedan fuera si se seleccionan solo medias+altas. En recolección ese error es más caro que una falsa alarma. El árbol en cambio no cruza nunca alta$\leftrightarrow$baja (se cumple en los 8 experimentos).
+
+Nota metodológica: la grilla de 117 es diagnóstico sintético de limitaciones, no test representativo independiente. No se usa para re-elegir (ya se observó). Y el 0.937 sobre 60 registros no da entero: revisar si se calculó sobre test de 60 o sobre otra evaluación antes de citarlo.
+
+\subsection{Verificación de escala y sensibilidad (por qué creernos)}
+\begin{itemize}
+\item Recorte medio (1422 tramos, 853/284/285): mismo ranking \texttt{arbol$\approx$svc $\geq$ kNN $>$ logística}, mismo elegido, desvíos $\sim$5x más chicos. Logística pasa de 4 a 1 error, kNN de 2 a 0. El piloto alcanzaba para decidir pero exageraba incertidumbre. Corroboración: \texttt{215ba2c}, \texttt{46e908c}.
+\item Sensibilidad (\texttt{scripts/analyze\_rule\_sensitivity.py}): mover \texttt{baja\_max} vacía media; mover \texttt{media\_max} trasvasa media$\leftrightarrow$alta; peso días casi no mueve hoy porque no hay días$>$0. El árbol seguiría dando $\sim$1.0 con la regla nueva: tunear la regla mirando métricas es circular.
+\item Bug real encontrado al escalar: \texttt{tramo\_id} duplicados por \texttt{frag\_idx} intra-fragmento. Fix con contador global por \texttt{reftramo} (\texttt{1464c39}), portado a main; rebuild del piloto byte-idéntico. Sin ese gate se rompía el join en silencio.
+\item Seed 1 (medio): ranking inmóvil; test del árbol 0.9965 (1 error en 285). El 1.0 es la moda, no garantía: con n=60 cada error son 1.7pp.
+\end{itemize}
+
+\subsection{Conclusión ML para el informe}
+El modelo cumple clasificación sobre el escenario sintético e integra sus predicciones con grafos. Debe leerse como clasificador de la regla construida, no como sistema validado para operación real. Límite principal: representatividad (93\% con \texttt{dias==0}); futuro: más días y combinaciones ausentes + etiquetas de registros operativos.
+
+%----------------------------------------------------------------
+\section{Grafos: problema y solución}
+
+\subsection{Problema}
+Dados los tramos con prioridad media/alta y contenedores, hallar un circuito cerrado de costo mínimo que los cubra, permitiendo transitar por tramos no prioritarios y repitiendo calles cuando sea necesario. Los circuitos administrativos no son conexos (3--16 componentes por circuito en el recorte medio): hay que unir componentes o el cartero chino es intratable.
+
+\subsection{Solución con NetworkX}
+\texttt{backend/src/collection/adapters/graphs/networkx\_route\_planner.py} (\texttt{NetworkxRoutePlanner}, issue \#28, \texttt{7e0b6a0}):
+\begin{enumerate}
+\item Grafo completo como \texttt{MultiGraph} (nodos + aristas con \texttt{weight=length\_m}).
+\item Obligatorias: \texttt{container\_count>0} y prioridad en \texttt{config.include} (típico media+alta).
+\item Unión de componentes obligatorias disconexas con MST auxiliar sobre caminos mínimos (\texttt{multi\_source\_dijkstra}): esos tramos son tránsito, no destino. Heurística: óptimo sobre la red elegida, no rural-postman global.
+\item Cartero chino ponderado sobre la red conexa elegida: pares de impares por caminos mínimos + \texttt{min\_weight\_matching}, duplicación, \texttt{eulerian\_circuit} sobre \texttt{MultiGraph}. No se usa \texttt{eulerize} porque minimiza cantidad de aristas, no metros.
+\item Salida \texttt{Route}: \texttt{order}, \texttt{repetitions}, \texttt{total\_cost\_m}, \texttt{coverage}, \texttt{transit}, \texttt{repeated\_distance\_m}.
+\end{enumerate}
+
+Librería: solo \texttt{networkx} + dominio propio. Complejidad: grafo completo de impares cuadrático + matching cúbico; acotar el área antes de ciudad entera (piloto segundos, medio minutos, ciudad inviable con doble loop — hacen falta \texttt{STRtree} + snap por hash).
+
+\begin{lstlisting}
+# unir componentes (heuristica rural)
+distances, paths = nx.multi_source_dijkstra(full_graph, sorted(comp_i))
+tree = nx.minimum_spanning_tree(aux, weight="weight")
+# cartero chino ponderado
+matching = nx.min_weight_matching(complete, weight="weight")
+circuit = list(nx.eulerian_circuit(euler_graph, source=start, keys=True))
+total = sum(length_by_id[sid] for sid in order)
+\end{lstlisting}
+
+Contrato en \texttt{application/ports/route\_planner.py} y caso de uso \texttt{plan\_route/use\_case.py}; API \texttt{POST /recorridos}. Tests: \texttt{test\_networkx\_route\_planner.py}, \texttt{test\_plan\_route.py}.
+
+%----------------------------------------------------------------
+\section{Qué corroborar con commits (para la defensa)}
+\begin{itemize}
+\item Regla y datos: \texttt{057de96} (regla v1), \texttt{59d8da3} (quejas), \texttt{1464c39} (tramo\_id único).
+\item Comparación: \texttt{b64e37e}, \texttt{1325859}, \texttt{d52c062} + \texttt{docs/modelo-comparacion.md}.
+\item Escala: \texttt{215ba2c}, \texttt{46e908c} (recorte medio 1422).
+\item Backend inferencia: \texttt{3e54649} (\#27). Grafos: \texttt{7e0b6a0} (\#28). Evaluación portable: \texttt{5bbb039} + \texttt{docs/comparacion-evaluacion/CONCLUSION.md}.
+\end{itemize}
+Cada número de este informe sale de esos archivos; el test se tocó una sola vez por semilla y solo para el elegido.
+
+%----------------------------------------------------------------
+\section{Trabajo futuro}
+Ampliar días y combinaciones ausentes; etiquetas de registros operativos; recorte grande ($\sim$1945 viales) con código actual; vectorizar build (\texttt{STRtree}) y particionar por municipio; predecir \texttt{dias} de la próxima foto en vez de la etiqueta sintética.
+
+\end{document}

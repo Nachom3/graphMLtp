@@ -1,0 +1,1134 @@
+{
+  "t0": "2026-10-23",
+  "seed": 42,
+  "bbox_wgs84": null,
+  "alcance": "montevideo",
+  "regla_v1": {
+    "score": "2*dias + 1*contenedores + zona_w (comercial 2, industrial 1, residencial 0)",
+    "umbrales_originales": {
+      "baja_max": 10,
+      "media_max": 16
+    },
+    "umbrales_recalibrados": {
+      "baja_max": 0,
+      "media_max": 2
+    },
+    "nota": "sin quejas: la original (con 3*quejas) daba 99.7% baja; score max 7"
+  },
+  "conteos": {
+    "nodos": 31106,
+    "tramos": 46234,
+    "contenedores_fuente": 10458
+  },
+  "balance_tipo_zona": {
+    "comercial": {
+      "n": 11794,
+      "pct": 25.5
+    },
+    "industrial": {
+      "n": 6875,
+      "pct": 14.9
+    },
+    "residencial": {
+      "n": 27565,
+      "pct": 59.6
+    }
+  },
+  "balance_prioridad": {
+    "alta": {
+      "n": 5649,
+      "pct": 12.2
+    },
+    "baja": {
+      "n": 23373,
+      "pct": 50.6
+    },
+    "media": {
+      "n": 17212,
+      "pct": 37.2
+    }
+  },
+  "no_asignados": {
+    "contenedores": 11
+  },
+  "ejes_excluidos": [
+    {
+      "reftramo": "743283",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "743350",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "744214",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "744494",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "744498",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "746074",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "747189",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "747250",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "748015",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "748712",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "749374",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "750402",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "752381",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "752763",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "756116",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "757588",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "758139",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "758142",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "759349",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "759691",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "759805",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "759879",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "760468",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "760856",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "761145",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "761829",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "762486",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "762495",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "762731",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "763872",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "764471",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "764973",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "764984",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "764986",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "764992",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "765521",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "765654",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "767630",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "767681",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "767990",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "768999",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "769025",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "769363",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "771889",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "773540",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "773739",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "775399",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "777377",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "777614",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "778854",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "778876",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "778998",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "779021",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "779125",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "779164",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "779240",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "779665",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "779961",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "780484",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "781298",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "783701",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "783704",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "783737",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "784511",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "784564",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "784574",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "784859",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "785411",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "786093",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "786769",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "786823",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "788058",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "789393",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "789449",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "789639",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "789644",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "791511",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "791516",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "791790",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "792764",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "792966",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "796190",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "796431",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "797736",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "797737",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "797738",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "798284",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "799661",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "801690",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "802016",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "802632",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "804826",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "805083",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "807409",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "807417",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "809009",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "809019",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "809321",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "809360",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "809361",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "809363",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "809600",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "810067",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "810102",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "810109",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "810823",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "811537",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "811720",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "811887",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "812015",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "813176",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "813347",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "813499",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "814594",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "814930",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "815164",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816113",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816114",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816126",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816144",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816386",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816390",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816826",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "816833",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "817130",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "817218",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "817400",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "817481",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "817490",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "817825",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "817974",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "818015",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "818253",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "818264",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "818265",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "818361",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "818364",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "822610",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "822634",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "822678",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "823280",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "823304",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "823867",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "823944",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "823945",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "823947",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "824122",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "825300",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "825796",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "825895",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "826184",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "826197",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "826199",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "826908",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "827122",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "827148",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "827748",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "828178",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "829971",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "830601",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "831079",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "831157",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "831546",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "831982",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "833402",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "833415",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "834029",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "949756",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "949761",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "949763",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950314",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950316",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950360",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950362",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950373",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950380",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950384",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950386",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950409",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950412",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950414",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950499",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950500",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950537",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950666",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "950881",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951143",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951152",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951198",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951200",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951202",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951204",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951241",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951243",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951262",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951317",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951323",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951332",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951924",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "951936",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "953546",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "985801",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "985844",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "986082",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "986130",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "986131",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "986149",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "986183",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "986184",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987097",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987098",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987188",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987190",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987192",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987194",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987235",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987238",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987243",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987585",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987634",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "987644",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997471",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997474",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997590",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997624",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997626",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997668",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997686",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997723",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997729",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997745",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997803",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997804",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997873",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "997881",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998126",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998134",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998136",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998138",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998141",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998169",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998171",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998173",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998175",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998178",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998268",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "998338",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1006711",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1014280",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1014282",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1014284",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1014286",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1016284",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1016288",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1018381",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1020251",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1020473",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1020476",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1020588",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1020591",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1020593",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1036816",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1036819",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1036887",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1036888",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1036889",
+      "motivo": "sin linea de al menos 0.01 m"
+    },
+    {
+      "reftramo": "1036894",
+      "motivo": "sin linea de al menos 0.01 m"
+    }
+  ],
+  "input_sha256": {
+    "11_ejes-ide/ejes_montevideo.csv": "b2fa87f24a029849bb00a186b6a61e9a4803221ea8bed9078cc14e52f79cb60b",
+    "09_levantes/containers.json": "6da312eda695c2427a7c348a0bb6417e9872d39932a26566e95e9cb23f5d8db8",
+    "10_smartwaste-mvd/containers_wgs84.csv": "c4a46a9a1bb34916d54cde8155ab57c445cc0c5d50429eeb04815985a7dd6ffb"
+  },
+  "output_sha256": {
+    "nodos.csv": "c51fd26f5bc7bc466743fb75382efde20e2c234bb835a788d092c99d161d96bd",
+    "tramos.csv": "767a33edc752cec6d573da906ad605d9df4b1dfe5539b85c2257055569a56a47",
+    "geometrias.geojson": "f386fdcf46b1d43fa1c345453e6bc8356aa0aff9edd751f90b2418b2800adbf4"
+  }
+}
