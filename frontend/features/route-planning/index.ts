@@ -1,4 +1,5 @@
-export { default as PlanificadorDemo } from "../../app/PlanificadorDemo";
+export { default as PlanificadorDemo } from "./components/planificador/PlanificadorDemo";
+export { Planificador } from "./components/planificador/Planificador";
 export {
   cargarEscenario,
   consultarComparacion,

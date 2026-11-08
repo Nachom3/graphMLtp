@@ -7,7 +7,12 @@ import type {
   Marker,
   Polyline,
 } from "leaflet";
-import { puntoMedioEnLinea, type LimitesMapa, type MapViewModel, type TramoVisible } from "../map-view/mapViewModel";
+import type { LimitesMapa, MapViewModel, TramoVisible } from "../map-view/mapViewModel";
+import { estilo, etiquetaTramo } from "./mapStyles";
+import { actualizarVehiculo, dibujarContenedores } from "./overlays";
+import type { PuntoContenedor } from "./overlays";
+
+export type { PuntoContenedor };
 
 /**
  * Cliente Leaflet real (solo se importa con ssr:false desde MapView).
@@ -16,12 +21,6 @@ import { puntoMedioEnLinea, type LimitesMapa, type MapViewModel, type TramoVisib
  * Recibe solo el view-model puro, nunca entidades del backend.
  */
 /** Punto de contenedor de levante para la capa opcional del mapa. */
-export interface PuntoContenedor {
-  lon: number;
-  lat: number;
-  days?: number;
-}
-
 export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, onSeleccionarTramo, contenedores, mostrarContenedores, fijarInicioActivo, onFijarInicio }: {
   modelo: MapViewModel;
   onLimitesChange?: (limites: LimitesMapa) => void;
@@ -51,7 +50,6 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
   const refOnSeleccionar = useRef(onSeleccionarTramo);
   const refSeleccionCapas = useRef<Map<string, Polyline>>(new Map());
   const refContenedores = useRef<LayerGroup | null>(null);
-  const refContenedoresProps = useRef({ contenedores, mostrarContenedores });
   const refFijarInicio = useRef({ fijarInicioActivo, onFijarInicio });
 
   useEffect(() => {
@@ -59,7 +57,6 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
     refLimitesChange.current = onLimitesChange;
     refSeleccionado.current = tramoSeleccionadoId;
     refOnSeleccionar.current = onSeleccionarTramo;
-    refContenedoresProps.current = { contenedores, mostrarContenedores };
     refFijarInicio.current = { fijarInicioActivo, onFijarInicio };
   });
 
@@ -215,89 +212,7 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
     }
     refDatos.current = new Map(m.tramos.map((t) => [t.segmentId, t]));
     refHayRecorrido.current = m.hayRecorrido;
-    actualizarVehiculo(m);
-  }
-
-  function actualizarVehiculo(m: MapViewModel) {
-    const L = refL.current;
-    const mapa = refMapa.current;
-    if (!L || !mapa) return;
-    const actual = m.tramos.find((t) => t.esPasoActual);
-    const puntos = actual?.puntosOrientados ?? actual?.puntos;
-    if (!actual || !puntos || puntos.length < 2) {
-      refVehiculo.current?.remove();
-      refVehiculo.current = null;
-      refFlecha.current?.remove();
-      refFlecha.current = null;
-      return;
-    }
-    const posicion = puntoMedioEnLinea(puntos);
-    if (!posicion) return;
-    const { punto: medio, angulo } = posicion;
-
-    if (!refVehiculo.current) {
-      const icono: DivIcon = L.divIcon({
-        html: "<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2'/><path d='M15 18H9'/><path d='M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14'/><circle cx='17' cy='18' r='2'/><circle cx='7' cy='18' r='2'/></svg>",
-        className: "marcador-vehiculo",
-        iconSize: [34, 34],
-        iconAnchor: [17, 17],
-      });
-      refVehiculo.current = L.marker(medio, {
-        icon: icono,
-        title: "Vehículo recolector",
-        zIndexOffset: 1000,
-        keyboard: false,
-      }).addTo(mapa);
-    } else {
-      refVehiculo.current.setLatLng(medio);
-    }
-    refVehiculo.current.bindTooltip(`Vehículo recolector: tramo ${actual.segmentId}`);
-
-    const iconoFlecha: DivIcon = L.divIcon({
-      className: "marcador-flecha",
-      html: `<span style="display:inline-block;transform:rotate(${angulo}deg)">➤</span>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-    });
-    if (!refFlecha.current) {
-      refFlecha.current = L.marker(medio, {
-        icon: iconoFlecha,
-        interactive: false,
-        keyboard: false,
-        zIndexOffset: 900,
-      }).addTo(mapa);
-    } else {
-      refFlecha.current.setLatLng(medio);
-      refFlecha.current.setIcon(iconoFlecha);
-    }
-  }
-
-  /** Capa opcional de contenedores: se redibuja desde los props vigentes. */
-  function dibujarContenedores() {
-    const L = refL.current;
-    const mapa = refMapa.current;
-    if (!L || !mapa) return;
-    const { contenedores, mostrarContenedores } = refContenedoresProps.current;
-    refContenedores.current?.remove();
-    refContenedores.current = null;
-    if (!mostrarContenedores || !contenedores || contenedores.length === 0) return;
-    const grupo = L.layerGroup();
-    for (const p of contenedores.slice(0, 2000)) {
-      L.circleMarker([p.lat, p.lon], {
-        radius: 3,
-        color: "#0ea5e9",
-        weight: 1,
-        opacity: 0.9,
-        fillOpacity: 0.7,
-        interactive: true,
-      })
-        .bindTooltip(
-          `Contenedor${p.days !== undefined ? ` · ${p.days} días sin recolección` : ""}`,
-        )
-        .addTo(grupo);
-    }
-    grupo.addTo(mapa);
-    refContenedores.current = grupo;
+    actualizarVehiculo(L, mapa, m, refVehiculo, refFlecha);
   }
 
   useEffect(() => {
@@ -361,16 +276,17 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
         refDatos.current = new Map();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     dibujar(modelo);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelo, tramoSeleccionadoId]);
 
   useEffect(() => {
-    dibujarContenedores();
+    const L = refL.current;
+    const mapa = refMapa.current;
+    if (!L || !mapa) return;
+    refContenedores.current = dibujarContenedores(L, mapa, refContenedores.current, contenedores, mostrarContenedores);
   }, [contenedores, mostrarContenedores, modelo]);
 
   return (
@@ -384,40 +300,4 @@ export function MapViewCliente({ modelo, onLimitesChange, tramoSeleccionadoId, o
   );
 }
 
-function estilo(t: TramoVisible, hayRecorrido: boolean, seleccionado = false) {
-  const fueraDeRuta = hayRecorrido && !t.enRecorrido;
-  return {
-    color: seleccionado && !t.esPasoActual ? "#7c3aed" : colorTramo(t),
-    weight: seleccionado ? 10 : t.esPasoActual ? 9 : t.esRepetido ? 7 : t.esDestino ? 6 : 4,
-    dashArray: t.esTransito
-      ? "3 8"
-      : t.prioridad === "medium"
-        ? "10 6"
-        : t.prioridad === "low"
-          ? "2 7"
-          : undefined,
-    opacity: t.esPasoActual ? 1 : fueraDeRuta ? 0.25 : t.esRepetido ? 0.95 : 0.85,
-    className: "cursor-pointer",
-  };
-}
-
-function colorTramo(t: TramoVisible): string {
-  if (t.esPasoActual) return "#047857";
-  if (t.esTransito) return "#52525b";
-  if (t.prioridad === "high") return "#dc2626";
-  if (t.prioridad === "medium") return "#d97706";
-  if (t.prioridad === "low") return "#2563eb";
-  return "#a1a1aa";
-}
-
-function etiquetaTramo(t: TramoVisible): string {
-  const paso = t.esDestino
-    ? "Destino obligatorio"
-    : t.esTransito
-      ? "Conexión de tránsito"
-      : "Tramo";
-  const orden =
-    t.ordenes.length > 0 ? ` · pasos ${t.ordenes.map((n) => n + 1).join(", ")}` : "";
-  const repeticiones = t.esRepetido ? ` · repetido ×${t.repeticiones}` : "";
-  return `${paso}: ${t.segmentId}${orden}${repeticiones}`;
-}
+export { colorTramo, estilo, etiquetaTramo } from "./mapStyles";
