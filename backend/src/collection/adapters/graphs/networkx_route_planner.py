@@ -10,7 +10,7 @@ meters and a single truck doing a closed circuit.
   those paths are transit, not destinations.
 - The weighted Chinese postman runs on the chosen connected network:
   odd-degree pairing via shortest paths + ``min_weight_matching``,
-  duplication, then ``eulerian_circuit`` over a ``MultiGraph``.
+  duplication, then a standalone Hierholzer traversal over a ``MultiGraph``.
   ``eulerize`` is NOT used: it minimizes the number of added edges,
   not meters.
 - Heuristic note: the circuit is optimal over the chosen network, but
@@ -30,6 +30,7 @@ from typing import Any
 
 import networkx as nx
 
+from ...domain.algorithms import hierholzer
 from ...domain.entities.predicted_segment import PredictedSegment
 from ...domain.entities.route import Route
 from ...domain.entities.route_config import RouteConfig
@@ -85,6 +86,23 @@ def _build_full_multigraph(
             length_m=float(segment.length_m),
         )
     return graph
+
+
+def _hierholzer_adjacency(
+    graph: nx.MultiGraph,
+) -> dict[str, list[tuple[str, str]]]:
+    """Copy a multigraph's keyed edge incidences for the domain traversal."""
+    copied = graph.copy()
+    adjacency: dict[str, list[tuple[str, str]]] = {
+        node: [] for node in copied.nodes
+    }
+    for node, neighbors in copied.adj.items():
+        for neighbor, keyed_edges in neighbors.items():
+            for key in keyed_edges:
+                adjacency[node].append((neighbor, key))
+                if node == neighbor:
+                    adjacency[node].append((neighbor, key))
+    return adjacency
 
 
 def _shortest_segment_for_step(graph: nx.MultiGraph, first: str, second: str) -> str:
@@ -298,7 +316,7 @@ class NetworkxRoutePlanner:
                     )
         if not nx.is_eulerian(euler_graph):
             raise ImpossibleRoute("red duplicada no euleriana")
-        circuit = list(nx.eulerian_circuit(euler_graph, source=start, keys=True))
+        circuit = hierholzer(_hierholzer_adjacency(euler_graph), start)
         order: list[str] = []
         for first, second, key in circuit:
             data = euler_graph.get_edge_data(first, second, key)
