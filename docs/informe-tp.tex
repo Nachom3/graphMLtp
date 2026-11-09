@@ -208,6 +208,15 @@ La exactitud y el F1 de 1.0 en test significan que, sobre las 60 filas reservada
 \subsection{La dificultad de los datos sintéticos}
 En el piloto $\approx$92{,}6\% (275/297) tiene días cero; el peso doble de días está escasamente observado. Los CSV actuales llevan etiqueta \#18 escrita por el builder; la preparación regenera quejas en memoria y recalcula $y$ (coincide con el CSV).
 
+\subsection{Hallazgo del árbol: tramos sin contenedores en media}
+Durante la comparación (issue \#10), al graficar el árbol ganador (Fig.~\ref{fig:arbol}, desde \texttt{notebooks/10\_entrenamiento\_modelos.ipynb} con el prompt ``Revisa las respuestas generadas por el arbol y busca inconsistencias''), se detectó que ramas con \texttt{cantidad\_contenedores == 0} caían en \texttt{media}. Ejemplo del piloto: tramo \texttt{743988} (RAMON MASINI, industrial, 0 cont., 0 días) etiquetado \texttt{media}. Fue el motivo para preferir el árbol frente al empate con SVC: solo el árbol deja ver este defecto.
+
+Causa: no es error de aprendizaje ---el árbol reproduce la regla con F1 1.0 porque $y=f(X)$ es determinista--- sino diseño de la etiqueta \#18 (\texttt{backend/src/collection/adapters/datasets/synthetic\_complaints.py}): \texttt{score = 2*dias + contenedores + zona\_w + 2*quejas} con \texttt{zona\_w=\{residencial:0, industrial:1, comercial:2\}} y umbrales \texttt{baja $\leq$ 0, media $\leq$ 2}. Con 0/0/0 las quejas son 0 por construcción, pero \texttt{zona\_w} sola ya da score 1--2 $\rightarrow$ \texttt{media} para industrial/comercial; solo residencial 0/0/0 queda \texttt{baja}. Operativamente es incorrecto: sin contenedor no hay recolección.
+
+Mitigación: la regla no se cambió (corregirla exige regenerar CSVs, re-correr \texttt{prepare+compare} e invalidar el test, procedimiento en \texttt{docs/modelo-comparacion.md}). Se contuvo aguas abajo: \texttt{NetworkxRoutePlanner.\_mandatory\_ids} exige \texttt{container\_count > 0}, por lo que un \texttt{media} sin contenedor nunca es obligatorio y solo sirve como tránsito. Detalle adicional en \texttt{ai.md}.
+
+Cara inversa del mismo problema (\texttt{SCORE\_LOW\_MAX=0}): como todos los términos del score son $\geq 0$, \texttt{baja} exige \texttt{dias=0, contenedores=0, zona=residencial, quejas=0} a la vez. En el piloto, las 129 filas \texttt{baja} tienen 0 contenedores (ninguna \texttt{baja} con contenedor; \texttt{alta}: 75/75 con contenedor; \texttt{media}: 81 sin + 12 con). Por eso \texttt{include=(baja)} produce selección vacía: \texttt{PlanRoute} y \texttt{NetworkxRoutePlanner} lanzan \texttt{ImpossibleRoute} (``ningún tramo con contenedores en prioridades incluidas''). No es un bug del planificador, es consecuencia matemática del umbral: \texttt{baja} nunca es ruteable por sí sola.
+
 \subsection{Limitaciones principales}
 \begin{itemize}[label=--]
 \item No hay etiquetas oficiales ni evaluación operativa con rutas reales.
@@ -215,6 +224,7 @@ En el piloto $\approx$92{,}6\% (275/297) tiene días cero; el peso doble de día
 \item Tipo de zona y quejas son simulados.
 \item El buen score es esperable cuando $y=f(X)$ es determinista.
 \item El artefacto servido se ajusta en el train de ciudad ($N_{\mathrm{train}}=27\,740$), pero las métricas citadas aquí son del piloto.
+\item \texttt{baja} implica 0 contenedores por \texttt{SCORE\_LOW\_MAX=0}; un recorrido solo-\texttt{baja} es selección vacía (\texttt{ImpossibleRoute}).
 \end{itemize}
 
 \subsection{Propiedad observada al cierre del desarrollo del modelo}
@@ -247,7 +257,7 @@ La API vigente expone: \texttt{GET /scenario}, \texttt{GET /containers}, \texttt
 
 \textbf{Dónde no:} definición de qué modelos comparar; arquitectura y tecnologías elegidas; comprensión de las técnicas de ML y de grafos; búsqueda y selección del dataset.
 
-\textbf{Prompts útiles (redacción del informe):}
+\textbf{Prompts útiles:}
 \begin{quote}\small
 ``Revisa las respuestas generadas por el arbol y busca inconsitencias.''
 \end{quote}
