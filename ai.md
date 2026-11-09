@@ -1,6 +1,6 @@
 # IA en el proyecto
 
-Utilicé la IA como asistente senior: cada duda la nutrí con información (documentación) y la bombardeé a preguntas, para luego ir a verificar lo que me dijo. A lo largo del proyecto la IA se equivocó muchas veces. Algunos ejemplos:
+Utilicé la IA como un asistente: cada duda la nutrí con información (documentación) y la bombardeé a preguntas, para luego ir a verificar lo que me dijo. A lo largo del proyecto la IA se equivocó muchas veces. Algunos ejemplos:
 
 - Generó una regla ambigua (había muchísimos contenedores en baja).
 - Generó código ofuscado, difícil de interpretar.
