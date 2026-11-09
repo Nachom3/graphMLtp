@@ -12,8 +12,13 @@ Dataset **mixto** en una zona piloto de Montevideo:
 - Simulado reproducible: `tipo_zona` (con semilla, issue #9).
 - Etiqueta construida: `prioridad_recoleccion` con regla pública v1 (no oficial).
 
-> `historico_quejas_vecinales` se eliminó del esquema (decisión de equipo): la
-> fuente Por Mi Barrio termina en 2020 y no aporta señal en la foto T0.
+> `historico_quejas_vecinales` no se persiste en `tramos.csv` (decisión de equipo):
+> la fuente Por Mi Barrio termina en 2020 y no aporta señal en la foto T0.
+> Se construye en runtime en memoria con semilla fija (`seed 0`, estable por
+> `tramo_id` en `backend/src/collection/adapters/datasets/synthetic_complaints.py`,
+> issue #18): sorteo uniforme `[0, 3]` por contenedor representado, suma por tramo
+> (cero si no hay contenedores). Esa columna en memoria entra a `X` y a la regla
+> de etiqueta #18 vigente; ver `docs/dataset-recoleccion.md` y `docs/modelo-comparacion.md`.
 
 Zona piloto v1 (WGS84): oeste `-56.16`, sur `-34.915`, este `-56.15`,
 norte `-34.905`. Recorte chico (~1 km × ~1.1 km) con 196 contenedores y

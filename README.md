@@ -3,6 +3,24 @@
 Demo: un árbol de decisión asigna prioridades a tramos de calle y la API v1
 planifica el circuito de recolección sobre un grafo. El frontend solo visualiza.
 
+## Informe
+
+Leé primero el informe del TP: [`readme/informe-tp.pdf`](readme/informe-tp.pdf)
+(fuente LaTeX en `docs/informe-tp.tex`). Ahí está la visión de conjunto:
+problema, dataset, modelo, grafos, API, capturas y uso de IA.
+
+Para **ampliar** lo del informe, el repo tiene markdowns de detalle alrededor
+del proyecto (no hace falta leerlos todos de entrada):
+
+- [`docs/dataset-recoleccion.md`](docs/dataset-recoleccion.md) — fuentes, esquema, regla de etiqueta
+- [`docs/modelo-comparacion.md`](docs/modelo-comparacion.md) — protocolo ML, métricas, escala
+- [`docs/comparacion-evaluacion/CONCLUSION.md`](docs/comparacion-evaluacion/CONCLUSION.md) — auditoría de evaluación
+- [`docs/contracts/api-v1.md`](docs/contracts/api-v1.md) — contrato HTTP
+- [`docs/architecture/`](docs/architecture/) — backend / frontend
+- [`backend/README.md`](backend/README.md), [`frontend/README.md`](frontend/README.md)
+- [`ai.md`](ai.md) — uso de IA (complemento de la sección del informe)
+- [`dataset/*/README.md`](dataset/) — READMEs de cada fuente/salida
+
 ## Cómo correrlo (desde la raíz)
 
 No existe carpeta `source`/`soruce`: el proyecto se corre desde la **raíz del repo**.
@@ -43,8 +61,8 @@ npm run dev:frontend   # next dev (desde frontend/)
 
 - `frontend/` — demo Next.js (mapa Leaflet, feature `route-planning`). Detalles en `frontend/README.md`.
 - `backend/` — FastAPI v1 (`/health`, `/scenario`, `/predictions:predict`, `/routes:plan`). Detalles en `backend/README.md`.
-- `scripts/` — `build_dataset.py`, `train_compare.py`, `generate_arbol_artifact.py`, `dev.sh`.
+- `scripts/` — `build_dataset.py`, `generate_arbol_artifact.py`, `dev.sh`.
 - `dataset/` — fuentes, `salida/` piloto y `salida-montevideo/` de ciudad (tramos, nodos y polilíneas IDE).
-- `docs/` — arquitectura, contrato API v1, comparación de modelos.
-
-Documentación de fondo: `PLAN.md`, `ai.md`, `lineamentos.md`, `readme/`.
+- `docs/` — fuente LaTeX/figs del informe, arquitectura, contrato API v1, comparación de modelos.
+- `readme/` — enunciado e informe PDF (`Enunciado.pdf`, `informe-tp.pdf`).
+- `notebooks/` — comparación de modelos (`10_entrenamiento_modelos.ipynb`); el backend solo sirve el árbol.

@@ -40,24 +40,28 @@ prioridad_recoleccion`.
 > (las quejas de Por Mi Barrio "no sirven"): la fuente termina en 2020 y no
 > aportaba señal en la foto T0. Ver Log del feature doc.
 
-## Regla v1 y recalibración
+## Regla de etiqueta (CSV actual = #18)
+
+El builder escribe `prioridad_recoleccion` con la regla #18 (quejas sintéticas
+en el score). Histórico: la recalibración #9 (sin quejas) quedó como paso
+intermedio; ya no es el contenido del CSV.
 
 ```text
-score = 2*dias + 1*contenedores + zona_w  (comercial 2, industrial 1, residencial 0)
+score = 2*dias + 1*contenedores + zona_w + 2*quejas
+  (zona_w: comercial 2, industrial 1, residencial 0; quejas uniformes [0,3] por contenedor, seed 0)
+baja ≤ 0 | media 1–2 | alta > 2
 ```
 
-| Umbrales | baja | media | alta | Balance |
-|---|---|---|---|---|
-| Original (issue #8) | ≤ 10 | 11–16 | ≥ 17 | 99.7 / 0.3 / 0.0 |
-| **Recalibrada** | ≤ 0 | 1–2 | ≥ 3 | **43.4 / 42.1 / 14.5** |
+| Etapa | Balance baja / media / alta (piloto N=297) |
+|---|---|
+| Issue #8 (umbrales 10/16) | 99.7 / 0.3 / 0.0 |
+| Regla #9 (sin quejas) | 43.4 / 42.1 / 14.5 |
+| **CSV actual (#18)** | **43.4 / 31.3 / 25.3** (129 / 93 / 75) |
 
-La original (con `3*quejas`) daba 99.7 % "baja" con los datos reales. Sin
-quejas, el score real llega a 7 y se recalibró a estos umbrales.
-
-## Balance de clases
+## Balance de clases (CSV actual)
 
 - `tipo_zona`: residencial 62.3 % / comercial 24.6 % / industrial 13.1 %.
-- `prioridad_recoleccion`: baja 43.4 % / media 42.1 % / alta 14.5 %.
+- `prioridad_recoleccion` (#18): baja 43.4 % / media 31.3 % / alta 25.3 %.
 
 ## No-asignados (cuarentena)
 

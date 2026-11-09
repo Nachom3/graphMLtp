@@ -1,0 +1,23 @@
+\contentsline {section}{\numberline {1}El problema}{2}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Tecnologías y piezas}{2}{subsection.1.1}%
+\contentsline {section}{\numberline {2}Cómo evolucionó el trabajo: decisiones, dificultades y correcciones}{2}{section.2}%
+\contentsline {section}{\numberline {3}Datos y definición del modelo}{2}{section.3}%
+\contentsline {subsection}{\numberline {3.1}Procedencia, alcance y qué significa ``real''}{2}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Qué CSV usa el experimento y cuál usa la aplicación}{3}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}De las nueve columnas a X e y}{3}{subsection.3.3}%
+\contentsline {section}{\numberline {4}Desarrollo, comparación y lectura del modelo}{4}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Protocolo para limitar sesgos y fuga}{4}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}Resultados del piloto y errores}{5}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Prueba con más datos (recorte medio)}{6}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}Interpretación y alcance de las métricas}{6}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}La dificultad de los datos sintéticos}{7}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}Limitaciones principales}{7}{subsection.4.6}%
+\contentsline {subsection}{\numberline {4.7}Propiedad observada al cierre del desarrollo del modelo}{7}{subsection.4.7}%
+\contentsline {section}{\numberline {5}Aplicación, API y uso de inteligencia artificial}{7}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Integración y contratos actuales}{7}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}La aplicación en funcionamiento}{8}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Declaración de uso de IA}{9}{subsection.5.3}%
+\contentsline {section}{\numberline {6}Grafos: del conjunto de destinos al circuito}{9}{section.6}%
+\contentsline {subsection}{\numberline {6.1}Cómo se conectan el modelo y el grafo}{9}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Qué implementa el planificador}{10}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Integración y límites prácticos}{10}{subsection.6.3}%

@@ -1,231 +1,305 @@
-% TP Machine Learning + Grafos — Informe
-% Proyecto: Recolección Montevideo (297 tramos piloto)
 \documentclass[11pt,a4paper]{article}
 \usepackage[utf8]{inputenc}
-\usepackage[spanish]{babel}
+\renewcommand{\figurename}{Figura}
+\renewcommand{\tablename}{Tabla}
+\renewcommand{\contentsname}{Índice}
 \usepackage{geometry}
-\geometry{margin=2.5cm}
-\usepackage{booktabs}
+\geometry{margin=2.35cm}
+\emergencystretch=2em
 \usepackage{graphicx}
-\usepackage{hyperref}
-\usepackage{listings}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{float}
 \usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
 \usepackage{amsmath}
+\usepackage{enumitem}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black,citecolor=blue!55!black,
+  pdftitle={Recolección de residuos},
+  pdfauthor={Ignacio Mastrangelo y Renzo Portela}}
+\lstset{basicstyle=\ttfamily\scriptsize,breaklines=true,frame=single,columns=fullflexible,showstringspaces=false,keepspaces=true}
+\setlist{itemsep=2pt,topsep=3pt}
+\renewcommand{\arraystretch}{1.13}
 
-\lstset{
-  basicstyle=\ttfamily\footnotesize,
-  keywordstyle=\color{blue},
-  commentstyle=\color{gray},
-  stringstyle=\color{red},
-  breaklines=true,
-  frame=single,
-  language=Python,
-  showstringspaces=false,
-  tabsize=2
-}
-
-\title{Recolección de residuos en Montevideo:\\ clasificación de prioridad con ML y planificación de recorridos con grafos}
-\author{TP Machine Learning + Grafos}
-\date{\today}
+\title{Recolección de residuos}
+\author{Ignacio Mastrangelo \and Renzo Portela}
+\date{Informe de proyecto — Machine Learning y Grafos}
 
 \begin{document}
 \maketitle
 
-\begin{abstract}
-Se construyó un dataset mixto de 297 tramos (red vial OSM real-derivada + contenedores reales + variables operativas sintéticas) con etiqueta sintética determinista. Se compararon los 4 clasificadores del curso con protocolo sin fuga (split 178/59/60 seed 0, CV5 solo en train, GridSearchCV, elección en validación, test de un solo uso). Árbol y SVM empataron en 1.0; se eligió el árbol por interpretabilidad, simplicidad operativa y mejor representación de la regla. El 1.0 mide ajuste a la regla, no desempeño operativo. El árbol además aprendió implícitamente el invariante de dominio \texttt{cont==0 $\Rightarrow$ dias==0}. Los tramos prioritarios alimentan un planificador NetworkX (rural + cartero chino ponderado) que devuelve un circuito cerrado con costo en metros.
-\end{abstract}
-
 \tableofcontents
 \newpage
 
-%----------------------------------------------------------------
-\section{Tecnologías y punto de partida}
+\section{El problema}
+Dada una red vial con contenedores, el objetivo es (1)~clasificar la prioridad de recolección de cada tramo y (2)~construir un circuito que cubra los tramos prioritarios. El flujo implementado es: datos $\rightarrow$ modelo $\rightarrow$ prioridades $\rightarrow$ selección de aristas $\rightarrow$ cartero chino/rural $\rightarrow$ API/mapa.
 
-\subsection{Decisión tecnológica}
-\begin{itemize}
-\item \textbf{Dataset y ML (Python):} \texttt{pandas==3.1.1}, \texttt{numpy==2.5.4}, \texttt{scikit-learn==1.9.1}, \texttt{matplotlib==3.10.8} para figuras. Semilla fija 0 en todo el pipeline.
-\item \textbf{Grafos y geo:} \texttt{networkx==3.7}, \texttt{shapely==2.2.0}, \texttt{pyproj==3.8.0}. La red se modela como \texttt{MultiGraph} no dirigido con peso \texttt{length\_m} geodésico.
-\item \textbf{Backend:} \texttt{fastapi==0.162.0} + \texttt{uvicorn}, dominio en inglés con mapeo ES$\leftrightarrow$EN explícito, \texttt{joblib} para el artefacto del árbol, \texttt{pytest + nbval} con pre-push hook.
-\item \textbf{Frontend demo:} Next.js + Tailwind, consume API v1 real (\texttt{/datos}, \texttt{/prediccion}, \texttt{/recorridos}).
-\end{itemize}
+\subsection{Tecnologías y piezas}
+El análisis de datos, los clasificadores y las figuras se apoyan en Python, pandas, NumPy, scikit-learn y Matplotlib. El adaptador de rutas utiliza NetworkX para el grafo, dijkstra y el emparejamiento; Hierholzer es implementacion propia. Las geometrías se trabajan en WGS84 y se integran en una aplicación Next.js/React con Leaflet. FastAPI expone los contratos de datos, predicción, explicación y planificación. Los archivos de dependencias son \texttt{requirements.txt} y \texttt{backend/requirements.txt}; el contrato vigente está descrito en \texttt{docs/contracts/api-v1.md} y la implementación HTTP es \texttt{backend/src/collection/transport/api\_v1.py}.
 
-Fuente: \texttt{requirements.txt} (scripts) y \texttt{backend/requirements.txt}.
+\section{Cómo evolucionó el trabajo: decisiones, dificultades y correcciones}
 
-\subsection{Problema entendido}
-No predecimos costo con regresión: el costo sale exacto del grafo (suma de \texttt{longitud\_m} + repeticiones del cartero chino). La tarea ML es \textbf{clasificación} de \texttt{prioridad\_recoleccion} $\in\{$baja, media, alta$\}$ por tramo en una foto T0. Cada fila es un tramo en T0; \texttt{dias\_*} mira hacia atrás, sin serie temporal. La etiqueta es construida y sintética (permitido por el enunciado, que aclara que es esperable que los modelos descubran la regla).
 
-Esquema real en \texttt{docs/dataset-recoleccion.md} y contratos en \texttt{docs/contracts/api-v1.md}; arquitectura en \texttt{docs/architecture/backend.md}.
-
-%----------------------------------------------------------------
-\section{Dataset y regla sintética}
-
-\subsection{Fuentes}
-\begin{itemize}
-\item Red vial: Geofabrik Uruguay OSM (80M, SHA-256 \texttt{37fd73...}).
-\item Contenedores: Figshare Montevideo Garbage Containers, 11\,556 coords (MD5 coincide).
-\item \texttt{dias\_desde\_ultima\_recoleccion}: real, de levantes (\texttt{daysWithoutLift}), foto T0.
-\item \texttt{tipo\_zona}: simulada 60/25/15 seed 42. \texttt{historico\_quejas\_vecinales}: sintético.
-\item Etiqueta: sintética, función determinista de X.
-\end{itemize}
-
-\subsection{Regla \#18 (la que aprende el modelo)}
-\begin{lstlisting}
-# backend/src/collection/adapters/datasets/synthetic_complaints.py
-DAYS_WEIGHT = 2; CONTAINERS_WEIGHT = 1
-ZONE_WEIGHTS = {"residencial": 0, "industrial": 1, "comercial": 2}
-COMPLAINT_WEIGHT = 2
-SCORE_LOW_MAX = 0; SCORE_MEDIUM_MAX = 2
-SCORE_FORMULA = "2*dias + 1*contenedores + 1*zona_w + 2*quejas"
-score = 2*dias + contenedores + zona_w + 2*quejas
-# baja si score<=0 | media si 1..2 | alta si >2
-\end{lstlisting}
-
-Cada contenedor representado recibe un sorteo uniforme $[0,3]$ (seed 0, estable por \texttt{tramo\_id}); la suma por tramo es \texttt{quejas}; si \texttt{cont==0} entonces \texttt{quejas==0}. Balance seed 0: \textbf{129 baja / 93 media / 75 alta} (43.4/31.3/25.3\%). La regla v1 sin quejas daba 129/125/43; las quejas mueven $\sim$12pp de media a alta.
-
-Distribución real que condiciona todo: \texttt{dias}$=\{0{:}275, 1{:}22\}$, \texttt{cont}$=\{0{:}210, 1{:}51, 2{:}30, 3{:}6\}$, quejas media 0.59 (75\% en cero). El peso 2x de días casi no se ejercita: es latente, no observado.
-
-Corroboración: \texttt{057de96} regla v1 recalibrada, \texttt{59d8da3} quejas sintéticas, \texttt{e722131} snap contenedores, \texttt{3205dbf} días desde levantes.
-
-\subsection{Invariante de dominio que el árbol aprendió solo}
-Verificado solo-lectura sobre el CSV:
-\begin{itemize}
-\item \texttt{cont==0 $\Rightarrow$ dias==0} en las \textbf{210/210} filas con \texttt{cont==0}.
-\item Las 22 filas con \texttt{dias==1} tienen todas \texttt{cont$\geq$1}.
-\end{itemize}
-Con \texttt{cont==0}, \texttt{quejas==0} forzado y \texttt{dias} ignorado, \texttt{score = zona\_w} $\rightarrow$ residencial $0\rightarrow$baja, industrial $1\rightarrow$media, comercial $2\rightarrow$media. \textbf{Es exactamente lo que aprendió el árbol en esa rama} (residencial$\rightarrow$baja, no-residencial$\rightarrow$media). El árbol entendió el dominio mejor que la fórmula: implementa gratis el invariante ``si no hay contenedor no hay pasada que contar''. Por eso no se toca código ni artefacto: cambiar la regla a \texttt{dias\_efectivo = dias if cont>0 else 0} deja 0/297 etiquetas iguales hoy, solo blinda futuro. Recomendación: una línea en doc (``\texttt{dias} es 0 por construcción cuando \texttt{cont} es 0'').
-
-\subsection{Implicancia directa: prioridad mínima con contenedores}
-De la fórmula se deduce sin entrenar nada:
-\begin{itemize}
-\item Si \texttt{cont$\geq$1} entonces \texttt{score$\geq$1} $\Rightarrow$ nunca \texttt{baja}: como mínimo \texttt{media} (1--2), o \texttt{alta} ($>$2) si hay días, zona comercial/industrial o quejas.
-\item Si \texttt{cont==0} entonces \texttt{quejas==0} y \texttt{score = 2*dias + zona\_w}. En el dataset actual además \texttt{dias==0} por invariante, así que \texttt{score = zona\_w}: residencial $\rightarrow$baja, industrial/comercial $\rightarrow$media. Con \texttt{dias$>$0} podría llegar a alta aun sin contenedores.
-\end{itemize}
-Al generar el dataset de entrenamiento se definió que cualquier tramo con contenedores sea como mínimo media. Por ejemplo, el caso \texttt{1 cont, 0 días, residencial, 0 quejas} da \texttt{score=1} $\rightarrow$media. Fue una decisión para simplificar el trabajo posterior: garantiza que \texttt{media+alta} cubra todo lo que tiene contenedor y que \texttt{baja} sea ``sin actividad''. Una forma de modificarlo sería ajustando \texttt{SCORE\_LOW\_MAX}.
-
-Consecuencia operativa: filtrar solo \texttt{low} casi siempre da selección vacía (``ningún tramo con contenedores en prioridades incluidas ['low']''), porque \texttt{baja} implica \texttt{cont==0} y el planificador exige \texttt{container\_count$>$0} para ser destino. La prioridad no es orden de visita (primero altas): solo define qué es obligatorio; el orden lo minimiza el cartero chino en metros.
-
-%----------------------------------------------------------------
-\section{Evaluación de modelos: por qué árboles}
-
-\subsection{Protocolo (sin hacer trampa)}
-\begin{enumerate}
-\item \textbf{Separar antes de mirar:} 178 train / 59 validación / 60 test (60/20/20), estratificado, seed 0. Test bajo llave hasta el final.
-\item \textbf{Practicar dentro del train:} CV estratificada 5 folds solo en train (shuffle seed 0). Cada modelo reporta media$\pm$std.
-\item \textbf{Grid pequeña, siempre adentro:} \texttt{GridSearchCV} (scoring F1 macro, refit) con todo lo que aprende dentro del \texttt{Pipeline} (\texttt{StandardScaler} solo en numéricas para logística/kNN/SVC; árbol sin escala; \texttt{OneHotEncoder(handle\_unknown="ignore")}). Sin fuga.
-\item \textbf{Elegir en validación, confirmar en test:} ganadores de cada grilla se contrastan en validación; elección por F1 macro. Test una sola vez, solo para el elegido + baseline mayoría.
+\begin{enumerate}[leftmargin=*]
+\item \textbf{Definir una unidad geográfica utilizable.} Se partió de ejes viales y coordenadas de contenedores, y se construyeron nodos y tramos con IDs para unir geometría, atributos y rutas. El recorte piloto permitió probar el flujo sin confundir un ejercicio de curso con un sistema listo para procesar toda la ciudad.
+\item \textbf{Recalibrar la etiqueta y después enriquecerla.} La regla inicial (issue 8) daba casi todas las filas como baja: la comparación histórica registra 99.7 por ciento bajas. Primero se recalibró la regla sin quejas (issue 9); ese resultado ya recalibrado fue 129 bajas, 125 medias y 43 altas en el piloto. Después, la regla 18 añadió quejas sintéticas y produjo 129 bajas, 93 medias y 75 altas en 297 filas. La prioridad nunca provino del municipio: son etiquetas construidas para el ejercicio.
+\item \textbf{Evitar que la evaluación mire información futura.} Se pasó a pipelines sin ajustar dentro de cada fold; la elección de modelo se hace con validación, y el conjunto de test se reserva para una única confirmación del elegido.
+\item \textbf{Resolver una discrepancia en los resultados comparativos.} En el piloto, árbol y SVC RBF empataron en validación. Se eligió el árbol por interpretabilidad. En una auditoría metodológica separada, \texttt{docs/comparacion-evaluacion/CONCLUSION.md} documenta otro protocolo (CV sobre train completo) que escoge KNN; no se mezclan esos resultados con el pipeline de producción.
+\item \textbf{Aprender del aumento de escala.} Al preparar el recorte medio, el gate de IDs detectó \texttt{tramo\_id} duplicados. Se corrigió mediante un contador de ocurrencias global por eje.
+\item \textbf{Integrar el modelo sin entrenarlo en cada petición.} La API carga un pipeline ya ajustado (\texttt{backend/artifacts/arbol-montevideo.joblib} por defecto). 
 \end{enumerate}
 
-\begin{lstlisting}
-# backend/src/collection/adapters/models/model_specs.py
-PARAM_GRIDS = {
-  "arbol": {"decisiontreeclassifier__max_depth": [None,3,5],
-            "decisiontreeclassifier__min_samples_split": [2,5]},
-  "logistica": {"logisticregression__C": [0.5,1.0,2.0]},
-  "knn": {"kneighborsclassifier__n_neighbors": [3,5,7]},
-  "svc": {"svc__C": [0.5,1.0]},  # RBF fijo
-}
-\end{lstlisting}
+\section{Datos y definición del modelo}
 
-Corroboración: \texttt{b64e37e} entrenar/comparar sobre \#18, \texttt{b9bbc09} fix \texttt{EvaluationProtocol.strafied}, \texttt{1325859} comparar los 4 y justificar árbol.
+\subsection{Procedencia, alcance y qué significa ``real''}
+La red vial deriva de OpenStreetMap/Geofabrik; la fuente y huella del extracto están consignadas en \texttt{docs/dataset-recoleccion.md}. Las coordenadas de contenedores proceden del conjunto de Toyos y Vallcorba, \emph{Montevideo Garbage Containers}, Figshare, DOI \url{https://doi.org/10.6084/m9.figshare.17126738.v1}. Para los levantes se usó el atributo \texttt{daysWithoutLift} de la instantánea de contenedores, agregando por tramo el máximo de sus valores. El proyecto documenta una foto T0 del 23 de octubre de 2026 en \texttt{dataset/09\_levantes/README.md}; por ello no hay una serie temporal de entrenamiento.
 
-\subsection{Resultados (seed 0, CSV 297)}
-\begin{center}
-\begin{tabular}{lcccc}
+La mezcla de procedencias es importante: geometría y contenedores son datos reales derivados; días procede de registros de levantes de una foto; \texttt{tipo\_zona} se asignó de forma simulada (semilla 42); las quejas se generan en forma sintética y anónima por contenedor representado; y \texttt{prioridad\_recoleccion} es una etiqueta sintética, a partir de la regla (fórmula 18). El conjunto de Windsor citado en la documentación aportó estadísticas agregadas de referencia al diseñar la simulación; el sorteo implementado de quejas es uniforme entero en $[0,3]$ por contenedor y no usa esos estadísticos en el código. Sus filas no se unen a Montevideo.
+
+\subsection{Qué CSV usa el experimento y cuál usa la aplicación}
+La comparación reportada para el piloto usa como entrada física \texttt{dataset/salida/tramos.csv}: tiene \textbf{297 filas de datos y 9 columnas}. La red completa para la aplicación está en \texttt{dataset/salida-montevideo/tramos.csv}: tiene \textbf{46\,234 filas y las mismas 9 columnas}. Los números del experimento piloto no deben leerse como una evaluación de las 46\,234 filas. El artefacto servido por defecto es \texttt{backend/artifacts/arbol-montevideo.joblib} (árbol ajustado en la partición train del CSV de ciudad, $N_{\mathrm{train}}=27\,740$; no usa las 46\,234 filas enteras); las métricas de este informe son del piloto.
+
+\begin{longtable}{>{\ttfamily\small}p{0.27\linewidth}p{0.66\linewidth}}
 \toprule
-Modelo & CV acc & CV F1 & Val acc & Val F1 \\
+Columna física & Significado y uso \\
 \midrule
-árbol & 0.9944$\pm$0.0111 & \textbf{0.9932$\pm$0.0136} & \textbf{1.0000} & \textbf{1.0000} \\
-svc RBF & 0.9776$\pm$0.0324 & 0.9733$\pm$0.0390 & \textbf{1.0000} & \textbf{1.0000} \\
-kNN & 0.9775$\pm$0.0276 & 0.9743$\pm$0.0315 & 0.9661 & 0.9680 \\
-logística & 0.9660$\pm$0.0331 & 0.9619$\pm$0.0367 & 0.9322 & 0.9268 \\
-baseline & --- & --- & 0.4407 & 0.2039 \\
+\endhead
+\texttt{tramo\_id} & ID estable del tramo. Trazabilidad y quejas reproducibles; no es predictor. \\
+\texttt{nodo\_origen} & Nodo inicial de la arista. Estructura del grafo, no predictor. \\
+\texttt{nodo\_destino} & Nodo final de la arista. Estructura del grafo, no predictor. \\
+\texttt{longitud\_m} & Longitud en metros. Costo del grafo; no entra al clasificador. \\
+\texttt{nombre\_calle} & Nombre descriptivo; no predictor. \\
+\texttt{tipo\_zona} & Residencial / comercial / industrial (simulada). Entra a $X$ (one-hot). \\
+\texttt{cantidad\_contenedores} & Conteo real-derivado. Entra a $X$. \\
+\texttt{dias\_desde\allowbreak\_ultima\allowbreak\_recoleccion} & Máximo de \texttt{daysWithoutLift} en la foto T0. Entra a $X$. \\
+\texttt{prioridad\_recoleccion} & Etiqueta sintética generada por la regla número 18 en ambos CSV actuales. \\
+\bottomrule
+\end{longtable}
+
+Esas nueve columnas son las únicas del CSV en disco. \texttt{historico\_quejas\_vecinales} \textbf{no se persiste}: se agrega en runtime al preparar el dataset para ML y al servir el escenario (misma función determinista, seed~0, a partir de \texttt{tramo\_id} y \texttt{cantidad\_contenedores}). Así el modelo la usa como feature sin figurar en el archivo fuente.
+
+Filas literales del CSV piloto:
+\begin{center}
+\small
+\begin{tabular}{rllrrlrrl}
+\toprule
+ID & Origen & Destino & m & Calle & Zona & Cont. & Días & Etiqueta CSV \\
+\midrule
+743359 & N0045 & N0062 & 127.07 & QUEBRACHO & comercial & 1 & 0 & alta \\
+743543 & N0020 & N0012 & 5.21 & MANDIYU & residencial & 0 & 0 & baja \\
+743988 & N0131 & N0120 & 116.62 & RAMON MASINI & industrial & 0 & 0 & media \\
 \bottomrule
 \end{tabular}
 \end{center}
 
-Mejor grilla: árbol \texttt{max\_depth=None, min\_samples\_split=2}; logística \texttt{C=0.5}; kNN \texttt{k=7}; SVC \texttt{C=1.0}.
+\subsection{De las nueve columnas a X e y}
+El código \texttt{ml\_preparation.py} define cuatro columnas de entrada; $y$ se reconstruye con la regla número 18. La cuarta feature, \texttt{historico\_quejas\_vecinales}, se \textbf{inyecta en runtime} (no viaja en el CSV): train y serving la regeneran con seed~0 por ID de tramo. Con esa semilla, la etiqueta recalculada coincide fila a fila con el CSV actual (297/297 y 46\,234/46\,234).
 
-Validación (n=59, orden baja/media/alta):
-\begin{itemize}
-\item árbol: \texttt{[[26,0,0],[0,18,0],[0,0,15]]} — cero errores.
-\item svc: idéntica — empate perfecto.
-\item kNN: \texttt{[[26,0,0],[2,16,0],[0,0,15]]} — 2 medias reales $\rightarrow$ baja.
-\item logística: \texttt{[[26,0,0],[2,16,0],[0,2,13]]} — 2 medias$\rightarrow$baja + 2 altas$\rightarrow$media.
-\item Elegido: \textbf{árbol}. Test un solo uso: acc 1.0000, F1 1.0000, matriz \texttt{[[26,0,0],[0,19,0],[0,0,15]]}.
-\end{itemize}
-
-Figuras: \texttt{docs/figs/f1\_comparacion.png}, \texttt{matrices\_confusion\_validacion.png}, \texttt{arbol\_ganador.png} (regenerables con \texttt{train\_compare.py --figures}). Corroboración: \texttt{d52c062} figuras + sensibilidad.
-
-\subsection{Por qué el árbol aunque empató con SVM}
-\begin{enumerate}
-\item \textbf{Interpretabilidad (criterio del curso):} se grafica con \texttt{plot\_tree} y muestra feature + umbral por decisión; SVC-RBF es caja negra.
-\item \textbf{Simplicidad operativa:} no lleva \texttt{StandardScaler}; menos piezas que se rompen con zonas no vistas.
-\item \textbf{Costo:} inferencia O(profundidad) vs O(n\_soporte $\times$ features).
-\item \textbf{Coherencia con el dato:} la etiqueta es regla por umbrales sobre las mismas features; el árbol la representa directo, SVC la aproxima.
-\end{enumerate}
-
-Lectura honesta que va en la defensa: el árbol gana porque la etiqueta es determinista sobre X; logística se acerca pero confunde vecinas, kNN queda en el medio, SVC empata pero pierde en interpretación y costo. El 1.0 en test no prueba utilidad operativa.
-
-\subsection{Interpolación vs extrapolación (la grilla de 117)}
-En los datos reales (interpolación) gana el árbol. En combinaciones construidas a mano que no aparecen en el dataset (extrapolación / fuera de soporte), kNN/SVM se equivocan menos en conteo bruto.
-
-Pero no alcanza con contar errores: \textbf{importa el tipo}. Los errores de kNN son \texttt{media$\rightarrow$baja}: tramos que deberían recolectarse quedan fuera si se seleccionan solo medias+altas. En recolección ese error es más caro que una falsa alarma. El árbol en cambio no cruza nunca alta$\leftrightarrow$baja (se cumple en los 8 experimentos).
-
-Nota metodológica: la grilla de 117 es diagnóstico sintético de limitaciones, no test representativo independiente. No se usa para re-elegir (ya se observó). Y el 0.937 sobre 60 registros no da entero: revisar si se calculó sobre test de 60 o sobre otra evaluación antes de citarlo.
-
-\subsection{Verificación de escala y sensibilidad (por qué creernos)}
-\begin{itemize}
-\item Recorte medio (1422 tramos, 853/284/285): mismo ranking \texttt{arbol$\approx$svc $\geq$ kNN $>$ logística}, mismo elegido, desvíos $\sim$5x más chicos. Logística pasa de 4 a 1 error, kNN de 2 a 0. El piloto alcanzaba para decidir pero exageraba incertidumbre. Corroboración: \texttt{215ba2c}, \texttt{46e908c}.
-\item Sensibilidad (\texttt{scripts/analyze\_rule\_sensitivity.py}): mover \texttt{baja\_max} vacía media; mover \texttt{media\_max} trasvasa media$\leftrightarrow$alta; peso días casi no mueve hoy porque no hay días$>$0. El árbol seguiría dando $\sim$1.0 con la regla nueva: tunear la regla mirando métricas es circular.
-\item Bug real encontrado al escalar: \texttt{tramo\_id} duplicados por \texttt{frag\_idx} intra-fragmento. Fix con contador global por \texttt{reftramo} (\texttt{1464c39}), portado a main; rebuild del piloto byte-idéntico. Sin ese gate se rompía el join en silencio.
-\item Seed 1 (medio): ranking inmóvil; test del árbol 0.9965 (1 error en 285). El 1.0 es la moda, no garantía: con n=60 cada error son 1.7pp.
-\end{itemize}
-
-\subsection{Conclusión ML para el informe}
-El modelo cumple clasificación sobre el escenario sintético e integra sus predicciones con grafos. Debe leerse como clasificador de la regla construida, no como sistema validado para operación real. Límite principal: representatividad (93\% con \texttt{dias==0}); futuro: más días y combinaciones ausentes + etiquetas de registros operativos.
-
-%----------------------------------------------------------------
-\section{Grafos: problema y solución}
-
-\subsection{Problema}
-Dados los tramos con prioridad media/alta y contenedores, hallar un circuito cerrado de costo mínimo que los cubra, permitiendo transitar por tramos no prioritarios y repitiendo calles cuando sea necesario. Los circuitos administrativos no son conexos (3--16 componentes por circuito en el recorte medio): hay que unir componentes o el cartero chino es intratable.
-
-\subsection{Solución con NetworkX}
-\texttt{backend/src/collection/adapters/graphs/networkx\_route\_planner.py} (\texttt{NetworkxRoutePlanner}, issue \#28, \texttt{7e0b6a0}):
-\begin{enumerate}
-\item Grafo completo como \texttt{MultiGraph} (nodos + aristas con \texttt{weight=length\_m}).
-\item Obligatorias: \texttt{container\_count>0} y prioridad en \texttt{config.include} (típico media+alta).
-\item Unión de componentes obligatorias disconexas con MST auxiliar sobre caminos mínimos (\texttt{multi\_source\_dijkstra}): esos tramos son tránsito, no destino. Heurística: óptimo sobre la red elegida, no rural-postman global.
-\item Cartero chino ponderado sobre la red conexa elegida: pares de impares por caminos mínimos + \texttt{min\_weight\_matching}, duplicación, \texttt{eulerian\_circuit} sobre \texttt{MultiGraph}. No se usa \texttt{eulerize} porque minimiza cantidad de aristas, no metros.
-\item Salida \texttt{Route}: \texttt{order}, \texttt{repetitions}, \texttt{total\_cost\_m}, \texttt{coverage}, \texttt{transit}, \texttt{repeated\_distance\_m}.
-\end{enumerate}
-
-Librería: solo \texttt{networkx} + dominio propio. Complejidad: grafo completo de impares cuadrático + matching cúbico; acotar el área antes de ciudad entera (piloto segundos, medio minutos, ciudad inviable con doble loop — hacen falta \texttt{STRtree} + snap por hash).
-
-\begin{lstlisting}
-# unir componentes (heuristica rural)
-distances, paths = nx.multi_source_dijkstra(full_graph, sorted(comp_i))
-tree = nx.minimum_spanning_tree(aux, weight="weight")
-# cartero chino ponderado
-matching = nx.min_weight_matching(complete, weight="weight")
-circuit = list(nx.eulerian_circuit(euler_graph, source=start, keys=True))
-total = sum(length_by_id[sid] for sid in order)
+\begin{lstlisting}[language=Python]
+FEATURE_COLUMNS = (
+    "cantidad_contenedores",
+    "dias_desde_ultima_recoleccion",
+    "tipo_zona",
+    "historico_quejas_vecinales",
+)
 \end{lstlisting}
 
-Contrato en \texttt{application/ports/route\_planner.py} y caso de uso \texttt{plan\_route/use\_case.py}; API \texttt{POST /recorridos}. Tests: \texttt{test\_networkx\_route\_planner.py}, \texttt{test\_plan\_route.py}.
+Fórmula \#18: \texttt{score = 2*dias + contenedores + zona\_w + 2*quejas}, con zona residencial=0, industrial=1, comercial=2; baja si score $\leq 0$, media si $1\leq score\leq 2$, alta si score $>2$. El árbol aprende una regla que usa las mismas variables de las que se deriva $y$ (circularidad de diseño declarada).
 
-%----------------------------------------------------------------
-\section{Qué corroborar con commits (para la defensa)}
-\begin{itemize}
-\item Regla y datos: \texttt{057de96} (regla v1), \texttt{59d8da3} (quejas), \texttt{1464c39} (tramo\_id único).
-\item Comparación: \texttt{b64e37e}, \texttt{1325859}, \texttt{d52c062} + \texttt{docs/modelo-comparacion.md}.
-\item Escala: \texttt{215ba2c}, \texttt{46e908c} (recorte medio 1422).
-\item Backend inferencia: \texttt{3e54649} (\#27). Grafos: \texttt{7e0b6a0} (\#28). Evaluación portable: \texttt{5bbb039} + \texttt{docs/comparacion-evaluacion/CONCLUSION.md}.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.94\linewidth]{figs/distribucion_piloto.png}
+\caption{Distribuciones porcentuales normalizadas: piloto (n=297) y Montevideo (n=46\,234). Comparación descriptiva de CSV, no evaluación del modelo.}
+\label{fig:distribuciones}
+\end{figure}
+
+\section{Desarrollo, comparación y lectura del modelo}
+
+\subsection{Protocolo para limitar sesgos y fuga}
+El piloto de 297 filas se dividió estratificadamente con semilla 0: 178 train, 59 validación y 60 test. En train, CV estratificada de cinco folds; grillas con F1 macro. Escaladores y codificadores dentro de cada pipeline/fold. Se escoge por validación; test una sola vez. Los cuatro clasificadores comparados (árbol, logística, KNN, SVC RBF) viven en \texttt{notebooks/10\_entrenamiento\_modelos.ipynb}; el backend solo declara y sirve el árbol.
+
+\begin{lstlisting}
+# notebooks/10_entrenamiento_modelos.ipynb: grillas de la comparacion
+"arbol": {"decisiontreeclassifier__max_depth": [None, 3, 5],
+          "decisiontreeclassifier__min_samples_split": [2, 5]},
+"logistica": {"logisticregression__C": [0.5, 1.0, 2.0]},
+"knn": {"kneighborsclassifier__n_neighbors": [3, 5, 7]},
+"svc": {"svc__C": [0.5, 1.0]},
+# backend model_specs.py solo declara el arbol servido por la API
+\end{lstlisting}
+
+\subsection{Resultados del piloto y errores}
+\begin{center}
+\small
+\begin{tabular}{lrrrr}
+\toprule
+Modelo & CV F1 macro (media $\pm$ desv.) & Val. accuracy & Val. F1 macro & Test F1 \\
+\midrule
+Árbol & 0.9932 $\pm$ 0.0136 & 1.0000 & 1.0000 & 1.0000 \\
+SVC RBF & 0.9733 $\pm$ 0.0390 & 1.0000 & 1.0000 & -- \\
+KNN & 0.9743 $\pm$ 0.0315 & 0.9661 & 0.9680 & -- \\
+Logística & 0.9619 $\pm$ 0.0367 & 0.9322 & 0.9268 & -- \\
+Baseline mayoría & -- & 0.4407 & 0.2039 & -- \\
+\bottomrule
+\end{tabular}
+\end{center}
+El protocolo reservó test para el árbol elegido. En validación, árbol y SVC obtuvieron matrices diagonales perfectas. KNN confundió dos medias como baja; logística, dos medias$\rightarrow$baja y dos altas$\rightarrow$media.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.86\linewidth]{figs/f1_comparacion.png}
+\caption{F1 macro de CV en train frente a validación (piloto). No es comparación sobre los 46\,234 tramos de ciudad.}
+\label{fig:f1}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{figs/matrices_confusion_validacion.png}
+\caption{Matrices de confusión de validación (filas: clase real; columnas: predicha; orden baja, media, alta).}
+\label{fig:confusion}
+\end{figure}
+
+Precision y recall macro en validación (piloto, $n=59$), tomados del contraste documentado en \texttt{docs/modelo-comparacion.md} y reproducidos en \texttt{notebooks/10\_entrenamiento\_modelos.ipynb}:
+
+\begin{center}
+\small
+\begin{tabular}{lrr}
+\toprule
+Modelo & Precision macro & Recall macro \\
+\midrule
+Árbol & 1.0000 & 1.0000 \\
+SVC RBF & 1.0000 & 1.0000 \\
+KNN & 0.9762 & 0.9630 \\
+Logística & 0.9392 & 0.9185 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+El árbol (y SVC) no cometen falsos positivos ni falsos negativos en validación. KNN pierde recall en media (2 medias reales predichas como baja). Logística mezcla clases vecinas (medias$\leftrightarrow$altas). En recolección, un falso negativo media$\rightarrow$baja es caro: el tramo puede quedar fuera del circuito si el filtro es media+alta.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{figs/precision_recall_validacion.png}
+\caption{Precision y recall macro en validación (piloto). Fuente: contraste del notebook 10 / \texttt{docs/modelo-comparacion.md}.}
+\label{fig:pr}
+\end{figure}
+
+Test de un solo uso (solo el árbol elegido, $n=60$): accuracy, precision, recall y F1 macro = 1.0000. Eso confirma el ajuste a la etiqueta sintética en el hold-out; no valida operación real.
+
+\subsection{Prueba con más datos (recorte medio)}
+Para chequear si el piloto ($N=297$) era demasiado chico, se repitió el mismo protocolo sobre un recorte medio de \textbf{1422 tramos} (split 853/284/285, misma semilla 0 y misma regla \#18). Evidencia en \texttt{docs/modelo-comparacion.md} (sección de verificación de escala) y en la rama \texttt{experimento-recorte-medio}.
+
+Resultado: el ranking se conserva (árbol$\approx$SVC $\geq$ KNN $>$ logística) y el elegido sigue siendo el árbol por el mismo desempate de interpretabilidad. Con más datos bajan los desvíos de CV ($\sim$5$\times$) y casi desaparecen los errores de KNN/logística en validación; el test del árbol sigue en 1.0. Conclusión: el piloto alcanza para decidir el modelo; el medio confirma que el resultado no era un accidente de $N$ chico. Detalle numérico en \texttt{docs/modelo-comparacion.md}.
+
+\subsection{Interpretación y alcance de las métricas}
+El artefacto que sirve la API por defecto es \texttt{backend/artifacts/arbol-montevideo.joblib}: árbol ajustado solo en la partición train del CSV de ciudad ($N_{\mathrm{train}}=27\,740$) con \texttt{max\_depth=None} y \texttt{min\_samples\_split=2}. Las métricas de esta sección (piloto y recorte medio) \textbf{no} validan ese artefacto de ciudad.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{figs/arbol_ganador.png}
+\caption{Árbol ganador (piloto), truncado a profundidad tres para lectura.}
+\label{fig:arbol}
+\end{figure}
+
+La exactitud y el F1 de 1.0 en test significan que, sobre las 60 filas reservadas del piloto, el árbol reprodujo la etiqueta sintética. No significan acierto operativo ni validación de ciudad. La revisión \texttt{docs/comparacion-evaluacion/CONCLUSION.md} selecciona KNN bajo otro protocolo; no se fusiona con este experimento.
+
+\subsection{La dificultad de los datos sintéticos}
+En el piloto $\approx$92{,}6\% (275/297) tiene días cero; el peso doble de días está escasamente observado. Los CSV actuales llevan etiqueta \#18 escrita por el builder; la preparación regenera quejas en memoria y recalcula $y$ (coincide con el CSV).
+
+\subsection{Limitaciones principales}
+\begin{itemize}[label=--]
+\item No hay etiquetas oficiales ni evaluación operativa con rutas reales.
+\item El piloto es una foto temporal (297 tramos); no evalúa generalización temporal ni espacial.
+\item Tipo de zona y quejas son simulados.
+\item El buen score es esperable cuando $y=f(X)$ es determinista.
+\item El artefacto servido se ajusta en el train de ciudad ($N_{\mathrm{train}}=27\,740$), pero las métricas citadas aquí son del piloto.
 \end{itemize}
-Cada número de este informe sale de esos archivos; el test se tocó una sola vez por semilla y solo para el elegido.
 
-%----------------------------------------------------------------
-\section{Trabajo futuro}
-Ampliar días y combinaciones ausentes; etiquetas de registros operativos; recorte grande ($\sim$1945 viales) con código actual; vectorizar build (\texttt{STRtree}) y particionar por municipio; predecir \texttt{dias} de la próxima foto en vez de la etiqueta sintética.
+\subsection{Propiedad observada al cierre del desarrollo del modelo}
+En el CSV piloto, las 210 filas sin contenedor tienen \texttt{dias}=0; las 22 con un día tienen al menos un contenedor. Es una propiedad observada del archivo, no una ley universal del servicio.
+
+\section{Aplicación, API y uso de inteligencia artificial}
+
+\subsection{Integración y contratos actuales}
+La API vigente expone: \texttt{GET /scenario}, \texttt{GET /containers}, \texttt{POST /predictions:predict}, \texttt{POST /predictions:explain}, \texttt{POST /routes:plan}. La inferencia consume el pipeline ya ajustado; las quejas del escenario se agregan en runtime (no se leen del CSV). Se carga el escenario de ciudad y \texttt{arbol-montevideo.joblib} por defecto.
+
+\subsection{La aplicación en funcionamiento}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{figs/interfaz-actual-prioridades.png}
+\caption{Interfaz actual antes de simular: filtros, nodo de inicio y mapa coloreado por prioridad predicha.}
+\label{fig:interfaz-prioridades}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{figs/interfaz-actual-recorrido.png}
+\caption{Interfaz actual tras calcular un recorrido: mapa, reproducción, costo y secuencia.}
+\label{fig:interfaz-recorrido}
+\end{figure}
+
+\subsection{Declaración de uso de IA}
+\textbf{Herramientas:} Cursor (agente Composer), GitHub Copilot y asistentes de chat para redacción/documentación.
+
+\textbf{Dónde sí:} documentación y flujo de trabajo; scripts del dataset; tests; parte de la implementación ML/API/frontend; redacción y compilación de este informe.
+
+\textbf{Dónde no:} definición de qué modelos comparar; arquitectura y tecnologías elegidas; comprensión de las técnicas de ML y de grafos; búsqueda y selección del dataset.
+
+\textbf{Prompts útiles (redacción del informe):}
+\begin{quote}\small
+``Revisa las respuestas generadas por el arbol y busca inconsitencias.''
+\end{quote}
+\begin{quote}\small
+``Reescribre esta funcion siguiendo las buenas practicas anunciadas en este link  https://refactoring.guru/es/design-patterns/adapter''
+\end{quote}
+
+\textbf{Error de la IA y corrección:} en una primera formulación, el asistente describió una rama del árbol como ``prueba de que el modelo entendió el dominio''. Se corrigió a ``propiedad observada del CSV'': el 1.0 no implica comprensión operativa.
+
+\textbf{Reflexión:} la IA aceleró boilerplate, tests y redacción, pero no sustituye decidir el protocolo de evaluación, justificar el árbol frente a KNN/CV, ni explicar Hierholzer (propio) y el uso de Dijkstra vía NetworkX en la defensa. Detalle adicional en \texttt{ai.md}.
+
+\section{Grafos: del conjunto de destinos al circuito}
+
+\subsection{Cómo se conectan el modelo y el grafo}
+La salida del clasificador es una prioridad por \texttt{tramo\_id} (\texttt{baja}/\texttt{media}/\texttt{alta}). Esa predicción \textbf{no} es el peso de la arista: el peso sigue siendo la longitud en metros. La predicción decide \emph{qué} aristas son obligatorias.
+
+Flujo concreto (código):
+\begin{enumerate}[leftmargin=*]
+\item \texttt{POST /predictions:predict} (\texttt{backend/src/collection/transport/api\_v1.py}) aplica el pipeline \texttt{arbol-montevideo.joblib} y devuelve prioridades.
+\item El frontend (o el cliente) arma el mapa \texttt{priorities} y el filtro \texttt{include} (por defecto media y alta).
+\item \texttt{POST /routes:plan} llama a \texttt{PlanRoute} (\texttt{backend/src/collection/application/use\_cases/plan\_route/use\_case.py}), que delega en \texttt{NetworkxRoutePlanner} (\texttt{backend/src/collection/adapters/graphs/networkx\_route\_planner.py}).
+\item El planner marca como obligatorias las aristas con contenedores cuya prioridad predicha $\in$ \texttt{include}; el resto puede usarse solo como tránsito.
+\end{enumerate}
+Si cambia la predicción (u overrides / \texttt{include}), cambia el conjunto obligatorio y, en general, el circuito. Eso es la integración pedida por el enunciado: ML $\rightarrow$ selección de aristas $\rightarrow$ algoritmo de grafos.
+
+La tarea toma los tramos con contenedores cuya prioridad está incluida (por defecto, media y alta) como destinos obligatorios. Los tramos sin contenedores pueden servir de tránsito. La prioridad selecciona qué cubrir; no dicta el orden de visita.
+
+\subsection{Qué implementa el planificador}
+El adaptador \texttt{networkx\_route\_planner.py} construye un multigrafo no dirigido ponderado por longitud. Si los componentes obligatorios están separados, los conecta con caminos mínimos sobre la red completa y un MST auxiliar (heurística rural-postman; no óptimo global). Después, sobre esa red, calcula caminos entre vértices impares con \textbf{Dijkstra de NetworkX} (\texttt{nx.single\_source\_dijkstra} / \texttt{nx.multi\_source\_dijkstra}), forma un emparejamiento de peso mínimo con \texttt{nx.min\_weight\_matching}, duplica esos caminos y obtiene el circuito con \textbf{Hierholzer propio} (\texttt{domain/algorithms/hierholzer.py}).
+
+NetworkX aporta la estructura \texttt{MultiGraph}, Dijkstra, el emparejamiento y comprobaciones auxiliares (\texttt{is\_eulerian}, componentes). No se usa \texttt{nx.eulerize} ni \texttt{nx.eulerian\_circuit}.
+
+\begin{lstlisting}
+# networkx_route_planner.py (esquema)
+matching = nx.min_weight_matching(complete, weight="weight")
+# ... se duplican caminos entre impares ...
+circuit = hierholzer(_hierholzer_adjacency(euler_graph), start)
+\end{lstlisting}
+
+El costo reportado es la suma exacta del circuito producido (incluye repeticiones). El grafo se modela no dirigido (simplificación del enunciado).
+
+\subsection{Integración y límites prácticos}
+Endpoint: \texttt{POST /routes:plan}. Si no hay destinos o la red no conecta, se devuelve error controlado. El costo no es una predicción del árbol. La demostración debe acotarse a una zona; no se afirma optimización de flota a escala ciudad.
+
+\section*{Conclusión}
+El sistema conecta clasificación de prioridad (árbol) con un circuito tipo cartero chino/rural sobre la red vial de Montevideo. Las métricas del piloto miden reproducción de una regla sintética; el valor del trabajo está en el flujo reproducible datos$\rightarrow$modelo$\rightarrow$grafo$\rightarrow$API$\rightarrow$mapa y en declarar sus límites.
+
+\section*{Fuentes y referencias verificables}
+\begin{itemize}[label=--]
+\item \texttt{docs/dataset-recoleccion.md}, \texttt{docs/modelo-comparacion.md}, \texttt{docs/comparacion-evaluacion/CONCLUSION.md}.
+\item \texttt{docs/contracts/api-v1.md}, \texttt{backend/README.md}, \texttt{ai.md}.
+\item Geofabrik Uruguay OSM; Figshare Montevideo Garbage Containers (DOI arriba).
+\end{itemize}
 
 \end{document}

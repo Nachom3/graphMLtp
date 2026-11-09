@@ -109,10 +109,24 @@ export function usePlanificador(): ValorPlanificador {
   return valor;
 }
 
+
+/** Reaplica overrides manuales encima de predicciones del modelo. */
+function aplicarEdiciones(
+  predichas: PriorityForSegment[],
+  editadas: Record<string, Priority>,
+): PriorityForSegment[] {
+  if (Object.keys(editadas).length === 0) return predichas;
+  return predichas.map((row) => {
+    const override = editadas[row.segmentId];
+    return override !== undefined ? { ...row, priority: override } : row;
+  });
+}
+
 export function PlanificadorProvider({ gateway, children }: { gateway: ApiGateway; children: ReactNode }) {
   const [scenario, setScenario] = useState<Scenario | null>(null);
   const [priorities, setPriorities] = useState<PriorityForSegment[]>([]);
   const [prioridadesEditadas, setPrioridadesEditadas] = useState<Record<string, Priority>>({});
+  const prioridadesEditadasRef = useRef<Record<string, Priority>>({});
   const [include, setInclude] = useState<Priority[]>(["high", "medium"]);
   const [startNodeId, setStartNodeId] = useState("");
   const [fijarInicio, setFijarInicio] = useState(false);
@@ -300,7 +314,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
     void solicitarPrioridades(gateway, new RequestStore(), "arbol", areaVisible.tramos).then((resultado) => {
       if (!active) return;
       if (resultado.estado === "exito") {
-        setPriorities(resultado.datos);
+        setPriorities(aplicarEdiciones(resultado.datos, prioridadesEditadasRef.current));
         setMessage(
           `Prioridades del área calculadas por el árbol (${resultado.datos.length} tramos). Revisá el mapa y tocá Simular circuito en esta zona.`,
         );
@@ -387,6 +401,7 @@ export function PlanificadorProvider({ gateway, children }: { gateway: ApiGatewa
   }
 
   function overridePriority(segmentId: string, priority: Priority) {
+    prioridadesEditadasRef.current = { ...prioridadesEditadasRef.current, [segmentId]: priority };
     setPriorities((current) =>
       current.map((row) => (row.segmentId === segmentId ? { ...row, priority } : row)),
     );

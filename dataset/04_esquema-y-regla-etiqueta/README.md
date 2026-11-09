@@ -65,18 +65,4 @@ operativa observada, y una buena métrica no demuestra utilidad operativa real.
 | T0004 | comercial | 1 | 0 | 3 | alta |
 | T0005 | residencial | 2 | 1 | 4 | alta |
 
-## Plan del script (issue #9, detalle)
 
-Stack del curso (Intro-ML, sesiones 1–5): Python + numpy, pandas,
-matplotlib y scikit-learn, con notebooks de referencia para
-preprocesamiento, los 4 clasificadores y evaluación. Extras requeridos
-por el TP (fuera del curso, justificados): manipulación geoespacial
-mínima (p. ej. pyproj o parsing propio) y networkx para grafos.
-Semilla fija y versionada. Pasos: 1) clip al bbox y
-construcción del grafo + componente conexo mayor; 2) snap de contenedores;
-3) `dias_desde_ultima_recoleccion` real; 4) `tipo_zona` simulada; 5) regla v1
-y reporte de balance; 6) escritura de `nodos.csv`/`tramos.csv` + `README` de
-procedencia. El issue #18 lee el CSV sin cambiarlo y deja en memoria la validación,
-partición reproducible 60/20/20 y transformación de `tipo_zona` sin ajustar.
-El issue #10 entrena y compara modelos, con CV sobre entrenamiento y test
-reservado.

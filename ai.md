@@ -1,6 +1,10 @@
 # IA en el proyecto
 
-Aca anotamos qué hicimos con IA y qué hicimos sin IA, simple.
+Utilize IA como un asistente senior, en donde cada duda o consulta que tenia la nutria de informacion(documentacion) y la bombardeaba a preguntas. Para luego ir a verificar lo que me dijo. A lo largo del proyecto la IA se equivoco muchas veces. Algunos ejemplos:
+
+- Genero una regla ambigua(habia muchisimos contendores en bajo)
+- Genera codigo ofuscado, dificil de interpretar
+- No se dio cuenta que el modelo agrupaba todos los contendores en media y alta, si que estos tenian como minimo un contendor. num_Cont > 1 -> media o alta
 
 ## La IA nos ayudó a hacer
 
@@ -11,7 +15,7 @@ Aca anotamos qué hicimos con IA y qué hicimos sin IA, simple.
 - La IA nos ayudó a sacar a Qodo como reviewer y dejar a Copilot.
 - La IA nos ayudó a construir el dataset reproducible del issue #9: `scripts/build_dataset.py` (grafo, snap de contenedores, features reales y simuladas, regla v1 recalibrada, gates de calidad) y el README de procedencia.
 - La IA nos ayudo en construir todos los tests que necesitabamos para construir el proyecto.
-- La IA nos ayudó a implementar el issue #10 sobre la preparación del #18: catálogo (`arbol` vs `logistica`), `SklearnEvaluator` (CV solo en train con fallback de folds, `GridSearchCV` chica, contraste en validación, test un solo uso), `SklearnPredictor` con mapeo ES<->EN, caso de uso por delegación, `scripts/train_compare.py`, notebook `10_entrenamiento_modelos` y `docs/modelo-comparacion.md`.
+- La IA nos ayudó a detectar fallas en la clasificacion del arbol. El haber elegido un arbol nos permitio ver que por ejemplo, el modelo miraba tramos sin contendores y les otorgaba "medio" como prioridad, algo que claramente esta mal. 
 
 ## Lo hicimos sin IA
 
