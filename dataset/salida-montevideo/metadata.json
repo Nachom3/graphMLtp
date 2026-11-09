@@ -4,7 +4,7 @@
   "bbox_wgs84": null,
   "alcance": "montevideo",
   "regla_v1": {
-    "score": "2*dias + 1*contenedores + zona_w (comercial 2, industrial 1, residencial 0)",
+    "score": "2*dias + 1*contenedores + zona_w + 2*quejas (comercial 2, industrial 1, residencial 0; quejas = suma sintetica [0,3] por contenedor, seed 0 por tramo_id)",
     "umbrales_originales": {
       "baja_max": 10,
       "media_max": 16
@@ -13,7 +13,7 @@
       "baja_max": 0,
       "media_max": 2
     },
-    "nota": "sin quejas: la original (con 3*quejas) daba 99.7% baja; score max 7"
+    "nota": "regla #18 con quejas sinteticas seed 0; el CSV ya trae el label final, ml_preparation lo recomputa identico"
   },
   "conteos": {
     "nodos": 31106,
@@ -36,16 +36,16 @@
   },
   "balance_prioridad": {
     "alta": {
-      "n": 5649,
-      "pct": 12.2
+      "n": 6806,
+      "pct": 14.7
     },
     "baja": {
       "n": 23373,
       "pct": 50.6
     },
     "media": {
-      "n": 17212,
-      "pct": 37.2
+      "n": 16055,
+      "pct": 34.7
     }
   },
   "no_asignados": {
@@ -1128,7 +1128,7 @@
   },
   "output_sha256": {
     "nodos.csv": "c51fd26f5bc7bc466743fb75382efde20e2c234bb835a788d092c99d161d96bd",
-    "tramos.csv": "767a33edc752cec6d573da906ad605d9df4b1dfe5539b85c2257055569a56a47",
+    "tramos.csv": "6f32b7c0555128c41b63ebe8515f773a1e0d7fc1f0792b47d47089af5cff49ca",
     "geometrias.geojson": "f386fdcf46b1d43fa1c345453e6bc8356aa0aff9edd751f90b2418b2800adbf4"
   }
 }

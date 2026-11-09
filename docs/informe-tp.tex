@@ -100,6 +100,8 @@ De la fórmula se deduce sin entrenar nada:
 \item Si \texttt{cont$\geq$1} entonces \texttt{score$\geq$1} $\Rightarrow$ nunca \texttt{baja}: como mínimo \texttt{media} (1--2), o \texttt{alta} ($>$2) si hay días, zona comercial/industrial o quejas.
 \item Si \texttt{cont==0} entonces \texttt{quejas==0} y \texttt{score = 2*dias + zona\_w}. En el dataset actual además \texttt{dias==0} por invariante, así que \texttt{score = zona\_w}: residencial $\rightarrow$baja, industrial/comercial $\rightarrow$media. Con \texttt{dias$>$0} podría llegar a alta aun sin contenedores.
 \end{itemize}
+Al generar el dataset de entrenamiento se definió que cualquier tramo con contenedores sea como mínimo media. Por ejemplo, el caso \texttt{1 cont, 0 días, residencial, 0 quejas} da \texttt{score=1} $\rightarrow$media. Fue una decisión para simplificar el trabajo posterior: garantiza que \texttt{media+alta} cubra todo lo que tiene contenedor y que \texttt{baja} sea ``sin actividad''. Una forma de modificarlo sería ajustando \texttt{SCORE\_LOW\_MAX}.
+
 Consecuencia operativa: filtrar solo \texttt{low} casi siempre da selección vacía (``ningún tramo con contenedores en prioridades incluidas ['low']''), porque \texttt{baja} implica \texttt{cont==0} y el planificador exige \texttt{container\_count$>$0} para ser destino. La prioridad no es orden de visita (primero altas): solo define qué es obligatorio; el orden lo minimiza el cartero chino en metros.
 
 %----------------------------------------------------------------

@@ -84,7 +84,7 @@ def write_metadata(nodos: list[dict], tramos: list[dict], audit: dict, zona_dist
         "bbox_wgs84": None if full_city else BBOX_WGS,
         "alcance": "montevideo" if full_city else "piloto",
         "regla_v1": {
-            "score": "2*dias + 1*contenedores + zona_w (comercial 2, industrial 1, residencial 0)",
+            "score": "2*dias + 1*contenedores + zona_w + 2*quejas (comercial 2, industrial 1, residencial 0; quejas = suma sintetica [0,3] por contenedor, seed 0 por tramo_id)",
             "umbrales_originales": {"baja_max": 10, "media_max": 16},
             "umbrales_recalibrados": {"baja_max": PRIORIDAD_BAJA_MAX, "media_max": PRIORIDAD_MEDIA_MAX},
             "nota": "sin quejas: la original (con 3*quejas) daba 99.7% baja; score max 7",

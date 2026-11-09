@@ -9,7 +9,7 @@
   },
   "alcance": "piloto",
   "regla_v1": {
-    "score": "2*dias + 1*contenedores + zona_w (comercial 2, industrial 1, residencial 0)",
+    "score": "2*dias + 1*contenedores + zona_w + 2*quejas (comercial 2, industrial 1, residencial 0; quejas = suma sintetica [0,3] por contenedor, seed 0 por tramo_id)",
     "umbrales_originales": {
       "baja_max": 10,
       "media_max": 16
@@ -18,7 +18,7 @@
       "baja_max": 0,
       "media_max": 2
     },
-    "nota": "sin quejas: la original (con 3*quejas) daba 99.7% baja; score max 7"
+    "nota": "regla #18 con quejas sinteticas seed 0; el CSV ya trae el label final, ml_preparation lo recomputa identico"
   },
   "conteos": {
     "nodos": 209,
@@ -41,16 +41,16 @@
   },
   "balance_prioridad": {
     "alta": {
-      "n": 43,
-      "pct": 14.5
+      "n": 75,
+      "pct": 25.3
     },
     "baja": {
       "n": 129,
       "pct": 43.4
     },
     "media": {
-      "n": 125,
-      "pct": 42.1
+      "n": 93,
+      "pct": 31.3
     }
   },
   "no_asignados": {
@@ -64,7 +64,7 @@
   },
   "output_sha256": {
     "nodos.csv": "9743a5f89cc390020deb29c8f54a41004270d0b7a3f92c760717c3ce1a9bb131",
-    "tramos.csv": "c332015ed38a063344ab86f39d11238ae66126fb4ccb654ce3d96e589b4567d8",
+    "tramos.csv": "70fa46698584102115dbc4a1939811e48bff4d0f8146023cea7637f46d4cf487",
     "geometrias.geojson": "4d5f91a490e8a8f3e8787220d4f58609babbc9c6881024f3b7e8cb788ab9fa63"
   }
 }

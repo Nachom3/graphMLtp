@@ -12,6 +12,6 @@
     "test": "npm run test --prefix frontend && python3 -m pytest backend/tests/ -q",
     "test:e2e": "npm run test:e2e --prefix frontend",
     "artifact": "python3 scripts/generate_arbol_artifact.py",
-    "install:all": "npm ci --prefix frontend && pip install -r backend/requirements.txt"
+    "install:all": "npm ci --prefix frontend && pip install -r backend/requirements.txt -r requirements.txt"
   }
 }

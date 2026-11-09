@@ -1,9 +1,31 @@
-"""Assign deterministic zone and synthetic priority attributes."""
+"""Assign deterministic zone and synthetic priority attributes.
+
+Etapa 5 delega en el backend (unica autoridad de la regla #18): este modulo
+solo adapta dicts del builder a esa regla. No hay dos formulas.
+"""
 from __future__ import annotations
+
+import sys
+from pathlib import Path
 
 import numpy as np
 
 from .config import SEED
+
+# Bootstrap para importar la regla canonica del backend sin instalar nada.
+_ROOT = Path(__file__).resolve().parents[2]
+_BACKEND_SRC = _ROOT / "backend" / "src"
+if str(_BACKEND_SRC) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_SRC))
+
+from collection.adapters.datasets.synthetic_complaints import (  # noqa: E402
+    COMPLAINT_SEED,
+    SCORE_LOW_MAX,
+    SCORE_MEDIUM_MAX,
+    ZONE_WEIGHTS,
+    complaint_count_for_segment,
+    label_priority,
+)
 
 
 def assign_tipo_zona(tramos: list[dict], seed: int = SEED) -> None:
@@ -17,36 +39,34 @@ def assign_tipo_zona(tramos: list[dict], seed: int = SEED) -> None:
         t["tipo_zona"] = z
 
 
-# Regla v1 (issue #8) RECALIBRADA sin quejas. La version original
-# (baja<=10, media 11-16, alta>=17) daba 99.7% baja / 0.3% media / 0% alta.
-# Sin el termino 3*quejas, umbrales recalibrados -> balance 43.4/42.1/14.5.
-ZONA_W = {"residencial": 0, "industrial": 1, "comercial": 2}
-PRIORIDAD_BAJA_MAX = 0
-PRIORIDAD_MEDIA_MAX = 2
+# Re-exports para compatibilidad (output.py y build_dataset.py importan de aqui).
+# La autoridad es backend synthetic_complaints; no tocar estos valores aqui.
+ZONA_W = dict(ZONE_WEIGHTS)
+PRIORIDAD_BAJA_MAX = SCORE_LOW_MAX
+PRIORIDAD_MEDIA_MAX = SCORE_MEDIUM_MAX
 
 
 # --------------------------------------------------------------------------- #
-# Etapa 5: prioridad_recoleccion (regla v1 recalibrada)
+# Etapa 5: prioridad_recoleccion (delega en backend, regla #18 con quejas)
 # --------------------------------------------------------------------------- #
-def assign_prioridad(tramos: list[dict]) -> None:
-    """Aplica la regla v1 sin quejas (score = 2*dias + 1*contenedores + zona_w)
-    con umbrales recalibrados: baja si score <= 0, media si 1-2, alta si >= 3.
+__all__ = ["assign_tipo_zona", "assign_prioridad", "complaint_count_for_segment"]
 
-    La regla original (con 3*quejas, baja<=10, media 11-16, alta>=17) daba
-    99.7% baja. Sin quejas el score real llega a 7: se recalibro y se registra
-    el balance final (ver Log del feature doc).
+
+def assign_prioridad(tramos: list[dict], *, seed: int = COMPLAINT_SEED) -> None:
+    """Aplica la regla #18 del backend sobre dicts del builder.
+
+    El CSV ya trae el label final y ml_preparation lo recomputa identico
+    (su sobrescritura pasa a ser no-op, conserva prioridad_original).
     """
     for t in tramos:
-        score = (
-            2 * t["dias_desde_ultima_recoleccion"]
-            + 1 * t["cantidad_contenedores"]
-            + ZONA_W[t["tipo_zona"]]
+        q = complaint_count_for_segment(
+            t["cantidad_contenedores"], seed=seed, segment_id=str(t["tramo_id"])
         )
-        if score <= PRIORIDAD_BAJA_MAX:
-            t["prioridad_recoleccion"] = "baja"
-        elif score <= PRIORIDAD_MEDIA_MAX:
-            t["prioridad_recoleccion"] = "media"
-        else:
-            t["prioridad_recoleccion"] = "alta"
+        t["prioridad_recoleccion"] = label_priority(
+            days=t["dias_desde_ultima_recoleccion"],
+            containers=t["cantidad_contenedores"],
+            zone=t["tipo_zona"],
+            complaints=q,
+        )
 
 

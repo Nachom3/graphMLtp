@@ -15,11 +15,12 @@ npm run dev                        # backend :8000 + frontend :3000
 
 Abrí `http://localhost:3000`. El escenario predeterminado se lee de
 `dataset/salida-montevideo/` y contiene geometrías IDE en WGS84; no se sustituye
-por el fixture si falta. El script genera el árbol de ciudad offline en
-`backend/artifacts/arbol-montevideo.joblib` si falta, sin modificar el anterior
-`arbol.joblib`. Si cambian los datos, regenerá el artefacto explícitamente.
+por el fixture si falta. `npm run dev` genera el artefacto por defecto
+`backend/artifacts/arbol-montevideo.joblib` si falta (vía `scripts/generate_arbol_artifact.py`).
+Si cambian los datos, regeneralo con `npm run artifact`.
 Las métricas publicadas para el piloto no son automáticamente métricas del
-modelo reentrenado con la ciudad.
+modelo reentrenado con la ciudad. El artefacto histórico `arbol.joblib` del piloto
+solo queda como referencia, no es el default.
 
 Por separado:
 
